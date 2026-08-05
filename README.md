@@ -217,11 +217,25 @@ nodes and in the configurations you handed out.
 ## Repository and licensing
 
 **PeerBlade is not open source at this stage.** The source code is proprietary
-and is not distributed under any open-source license. This repository is public
-only to describe the product — it holds no source code.
+and is not distributed under any open-source license.
+
+This repository holds what you need to run the service — the Compose file, the
+reverse-proxy configuration, the bootstrap script and the documentation. The
+application itself ships as container images on GHCR; its source code is not
+published here or anywhere else.
+
+**You may** deploy PeerBlade in your own infrastructure for your own or your
+organisation's use, run as many nodes and peers as you like, adapt the
+configuration in this repository to your environment, and write about PeerBlade
+in reviews, articles and comparisons.
+
+**You may not**, without the rights holder's consent, extract the source from
+the images or reverse-engineer them, redistribute the images under another
+name, or offer a service based on PeerBlade to third parties.
 
 Self-hosted and open source are different things: you run PeerBlade in your own
-infrastructure, while the rights to the code stay with the rights holder.
+infrastructure, while the rights to the code stay with the rights holder. The
+authoritative wording is in the [Terms](https://peerblade.com/terms).
 
 ## Status
 
