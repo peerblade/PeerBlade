@@ -83,6 +83,13 @@ GHCR, and the node agent is attached to each GitHub release.
 - 🔓 **An open UDP port on each node** for your peers — that one is for
   WireGuard itself, not for PeerBlade
 
+You do not have to buy a domain — any DNS name that resolves to the host will
+do, including a free one such as `203-0-113-10.sslip.io` (resolves to the IP
+encoded in it, no registration) or a DuckDNS subdomain. A bare IP address will
+not work: the panel needs a real certificate, because the session cookie is
+`Secure` and the agent installer refuses anything but HTTPS — that is the same
+channel agent tokens travel over.
+
 The control plane and a WireGuard node may live on the same machine, but keeping
 them apart is the better default.
 
