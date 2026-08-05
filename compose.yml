@@ -1,0 +1,147 @@
+# PeerBlade — production stack.
+# Images are pulled from GHCR; nothing is built locally.
+# Pin a release with PEERBLADE_IMAGE_TAG, for example PEERBLADE_IMAGE_TAG=0.1.0
+
+name: peerblade
+
+x-service: &service
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  logging: &default-logging
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-peerblade}
+      POSTGRES_USER: ${POSTGRES_USER:-peerblade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  migrate:
+    <<: *service
+    image: ghcr.io/peerblade/peerblade-api:${PEERBLADE_IMAGE_TAG:-latest}
+    restart: 'no'
+    command:
+      - /app/node_modules/.bin/prisma
+      - migrate
+      - deploy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-peerblade}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-peerblade}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *service
+    image: ghcr.io/peerblade/peerblade-api:${PEERBLADE_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ['node', 'dist/main.js']
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_PORT: 4000
+      WEB_ORIGIN: https://${PEERBLADE_DOMAIN:?set PEERBLADE_DOMAIN}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-peerblade}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-peerblade}?schema=public
+      AGENT_OFFLINE_AFTER_SECONDS: ${AGENT_OFFLINE_AFTER_SECONDS:-90}
+      AGENT_ENROLLMENT_TTL_MINUTES: ${AGENT_ENROLLMENT_TTL_MINUTES:-15}
+      AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-168}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      default:
+      edge:
+        aliases:
+          - ${PEERBLADE_API_HOSTNAME:-peerblade-api}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  web:
+    <<: *service
+    image: ghcr.io/peerblade/peerblade-web:${PEERBLADE_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ['node', 'apps/web/server.js']
+    environment:
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      default:
+      edge:
+        aliases:
+          - ${PEERBLADE_WEB_HOSTNAME:-peerblade-web}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    environment:
+      PEERBLADE_DOMAIN: ${PEERBLADE_DOMAIN:?set PEERBLADE_DOMAIN}
+      PEERBLADE_ADMIN_USER: ${PEERBLADE_ADMIN_USER:-admin}
+      PEERBLADE_ADMIN_PASSWORD_HASH: ${PEERBLADE_ADMIN_PASSWORD_HASH:-}
+      PEERBLADE_API_HOSTNAME: ${PEERBLADE_API_HOSTNAME:-peerblade-api}
+      PEERBLADE_WEB_HOSTNAME: ${PEERBLADE_WEB_HOSTNAME:-peerblade-web}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile.${PEERBLADE_AUTH_PROXY_MODE:-basic}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks:
+      - edge
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge:
+    name: peerblade-edge
+    external: true
