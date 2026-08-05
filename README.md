@@ -64,20 +64,22 @@ untouched, and you can still manage it with `wg` and `wg-quick`.
 
 ## Deployment
 
-Everything below runs from this repository: it contains the Compose file, the
-reverse-proxy configuration and a bootstrap script. There is no source tree to
-clone and nothing to compile — the services are published as container images on
+Everything below runs from this repository: it holds the Compose file, the
+reverse-proxy configuration, a bootstrap script for the control plane and an
+interface setup script for the nodes. There is no source tree to clone and
+nothing to compile — the services are published as container images on
 GHCR, and the node agent is attached to each GitHub release.
 
 ### What you need
 
 - 🐧 **A Linux host for the control plane** — Docker Engine with Compose v2,
-  ports 80 and 443 free, 1 GB RAM is enough
+  ports 80 and 443 free, 2 GB RAM
 - 🌐 **A domain for the panel** — an `A` (and optionally `AAAA`) record pointing
   at that host. It must resolve *before* the first start: Caddy requests a
   Let's Encrypt certificate on boot.
-- 🐧 **One or more WireGuard nodes** — Ubuntu or Debian x86_64 with systemd and
-  the `wireguard-tools` package, plus outbound HTTPS to the panel
+- 🐧 **One or more WireGuard nodes** — x86_64 Linux with systemd (tested on
+  Ubuntu and Debian) and outbound HTTPS to the panel. To let PeerBlade manage a
+  dedicated interface, the node also needs `wireguard-tools` and `iptables`.
 - 🔓 **An open UDP port on each node** for your peers — that one is for
   WireGuard itself, not for PeerBlade
 
@@ -87,7 +89,7 @@ them apart is the better default.
 ### 1. Control plane
 
 ```bash
-sudo git clone https://github.com/peerblade/peerblade.git /opt/peerblade
+sudo git clone https://github.com/peerblade/PeerBlade.git /opt/peerblade
 cd /opt/peerblade
 
 # Generates .env, the PostgreSQL password and a Basic Auth administrator.
@@ -139,8 +141,8 @@ database.
 
 ### 3. WireGuard node
 
-In the panel: **Servers → Add server**. It returns a one-time install command —
-run it on the node as root:
+In the panel: **Servers → Connect a server**. It returns a one-time install
+command — run it on the node as root:
 
 ```bash
 curl -fsSL 'https://panel.example.com/install-agent.sh' | \
@@ -161,11 +163,50 @@ The server appears **online** in the panel within a snapshot interval.
 
 Note what the installer deliberately does **not** do: it never creates,
 modifies or removes WireGuard interfaces. Existing interfaces are read and shown
-as imported. Handing a dedicated interface over to PeerBlade is a separate,
-explicit step — you decide the interface name, its address range and its public
-endpoint.
+as imported, and PeerBlade will not touch them.
 
-### 4. More nodes
+### 4. A managed interface
+
+To create peers from the panel, the node needs one interface that PeerBlade
+owns. This step is deliberately separate: you decide the interface name, its
+address range and its public endpoint.
+
+If the node has no interface for this yet, create one — the script writes
+`/etc/wireguard/<interface>.conf` with a fresh key, enables IPv4 forwarding and
+NAT, and starts `wg-quick`. It refuses to overwrite an existing configuration
+or interface:
+
+```bash
+# INTERFACE  ADDRESS/24  UDP PORT  OUTBOUND INTERFACE
+sudo ./setup-wireguard.sh peerblade0 10.8.0.1/24 51822 eth0
+```
+
+Take the outbound interface from `ip route get 1.1.1.1`, and open the UDP port
+in the VPS firewall — peers connect to it directly.
+
+Then tell the agent which interface it manages, in `/etc/peerblade/agent.env`:
+
+```bash
+PEERBLADE_MANAGED_INTERFACE=peerblade0
+PEERBLADE_MANAGED_ENDPOINT=node.example.com:51822
+PEERBLADE_MANAGED_ADDRESS_CIDR=10.8.0.1/24
+PEERBLADE_MANAGED_ALLOWED_IPS=0.0.0.0/0
+PEERBLADE_STATE_DIRECTORY=/var/lib/peerblade-agent
+```
+
+The endpoint is what goes into peer configurations, so it must be the address
+peers can reach from the outside. Restart and check:
+
+```bash
+sudo systemctl restart peerblade-agent
+journalctl -u peerblade-agent -n 30
+```
+
+The agent keeps its peers in `peers.json` inside the state directory and
+reconciles the interface against it on every start, so a reboot or a lost
+`wg` state does not lose peers.
+
+### 5. More nodes
 
 Each node gets its own agent, its own interface and its own endpoint. Give every
 node a distinct address range (`10.8.0.0/24`, `10.9.0.0/24`, …) so peer
