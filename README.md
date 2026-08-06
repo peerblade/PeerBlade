@@ -218,10 +218,17 @@ interface that PeerBlade owns. This step is deliberately separate — you decide
 the interface name, its address range and its public endpoint.
 
 **4.1 — Create the interface.** Skip to 4.2 if the node already has one for
-PeerBlade. Otherwise download the script and run it on the node. It writes
-`/etc/wireguard/peerblade0.conf` with a fresh key, enables IPv4 forwarding and
-NAT and starts `wg-quick`; it refuses to overwrite an existing configuration or
-interface, so it is safe to run on a node that already has WireGuard:
+PeerBlade. Otherwise install WireGuard itself — the agent speaks to the kernel
+directly, but creating an interface needs the userspace tools:
+
+```bash
+apt-get update && apt-get install -y wireguard-tools iptables
+```
+
+Then download the script and run it. It writes `/etc/wireguard/peerblade0.conf`
+with a fresh key, enables IPv4 forwarding and NAT and starts `wg-quick`; it
+refuses to overwrite an existing configuration or interface, so it is safe to
+run on a node that already has WireGuard:
 
 ```bash
 curl -fsSL -o /tmp/setup-wireguard.sh \
@@ -229,6 +236,13 @@ curl -fsSL -o /tmp/setup-wireguard.sh \
 chmod +x /tmp/setup-wireguard.sh
 /tmp/setup-wireguard.sh peerblade0 10.8.0.1/24 51822 \
   "$(ip route get 1.1.1.1 | grep -oP 'dev \K\S+')"
+```
+
+Check that it came up before going on — 4.2 reads its settings from the running
+interface:
+
+```bash
+wg show peerblade0
 ```
 
 The arguments are the interface name, its address, the UDP port and the node's
