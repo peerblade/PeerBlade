@@ -72,8 +72,10 @@ GHCR, and the node agent is attached to each GitHub release.
 
 ### What you need
 
-- 🐧 **A Linux host for the control plane** — Docker Engine with Compose v2,
-  ports 80 and 443 free, 2 GB RAM
+- 🐧 **A Linux host for the control plane** — x86_64 with Docker Engine and
+  Compose v2, ports 80 and 443 free, 2 GB RAM. The published images are
+  `linux/amd64` only, so an ARM server (Ampere, Graviton, Hetzner CAX) will
+  refuse to start them with `no matching manifest for linux/arm64`.
 - 🌐 **A domain for the panel** — an `A` (and optionally `AAAA`) record pointing
   at that host. It must resolve *before* the first start: Caddy requests a
   Let's Encrypt certificate on boot.
