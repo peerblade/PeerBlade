@@ -127,9 +127,12 @@ why — almost always DNS not yet pointing at the host, or port 80 blocked.
 ### 2. First administrator
 
 Open `https://panel.example.com`. While `PEERBLADE_AUTH_PROXY_MODE=basic` the
-reverse proxy asks for the Basic Auth credentials from
-`admin-credentials.txt` first — that gate exists so a fresh installation is
-never exposed before the account is created.
+reverse proxy asks for a login and password first — that gate exists so a fresh
+installation is never exposed before the account is created. Print them:
+
+```bash
+sudo cat /opt/peerblade/admin-credentials.txt
+```
 
 With an empty database the panel shows **Set up PeerBlade** and asks you to
 create the administrator of this installation. Afterwards the initial setup is
@@ -138,6 +141,7 @@ blocked at the database level and the panel shows the sign-in form instead.
 Once you have the account, drop the extra gate:
 
 ```bash
+cd /opt/peerblade
 sudo sed -i 's/^PEERBLADE_AUTH_PROXY_MODE=.*/PEERBLADE_AUTH_PROXY_MODE=app/' .env
 sudo docker compose up -d caddy
 ```
@@ -149,7 +153,8 @@ database.
 ### 3. WireGuard node
 
 In the panel: **Servers → Connect a server**. It returns a one-time install
-command — run it on the node as root:
+command with the token already filled in — copy it from the panel and run it on
+the node. It looks like this:
 
 ```bash
 curl -fsSL 'https://panel.example.com/install-agent.sh' | \
@@ -162,8 +167,8 @@ starts a systemd unit. The enrollment token is valid for 15 minutes and
 single-use. Verify it came up:
 
 ```bash
-systemctl status peerblade-agent
-journalctl -u peerblade-agent -f
+systemctl status peerblade-agent --no-pager
+journalctl -u peerblade-agent -n 30 --no-pager
 ```
 
 The server appears **online** in the panel within a snapshot interval.
@@ -174,44 +179,77 @@ as imported, and PeerBlade will not touch them.
 
 ### 4. A managed interface
 
-To create peers from the panel, the node needs one interface that PeerBlade
-owns. This step is deliberately separate: you decide the interface name, its
-address range and its public endpoint.
+The agent is connected, but it will not create anything yet: it needs one
+interface that PeerBlade owns. This step is deliberately separate — you decide
+the interface name, its address range and its public endpoint.
 
-If the node has no interface for this yet, create one — the script writes
-`/etc/wireguard/<interface>.conf` with a fresh key, enables IPv4 forwarding and
-NAT, and starts `wg-quick`. It refuses to overwrite an existing configuration
-or interface:
+**4.1 — Create the interface.** Skip to 4.2 if the node already has one for
+PeerBlade. Otherwise download the script and run it on the node. It writes
+`/etc/wireguard/peerblade0.conf` with a fresh key, enables IPv4 forwarding and
+NAT and starts `wg-quick`; it refuses to overwrite an existing configuration or
+interface, so it is safe to run on a node that already has WireGuard:
 
 ```bash
-# INTERFACE  ADDRESS/24  UDP PORT  OUTBOUND INTERFACE
-sudo ./setup-wireguard.sh peerblade0 10.8.0.1/24 51822 eth0
+curl -fsSL -o /tmp/setup-wireguard.sh \
+  https://raw.githubusercontent.com/peerblade/PeerBlade/main/setup-wireguard.sh
+chmod +x /tmp/setup-wireguard.sh
+sudo /tmp/setup-wireguard.sh peerblade0 10.8.0.1/24 51822 \
+  "$(ip route get 1.1.1.1 | grep -oP 'dev \K\S+')"
 ```
 
-Take the outbound interface from `ip route get 1.1.1.1`, and open the UDP port
-in the VPS firewall — peers connect to it directly.
+The arguments are the interface name, its address, the UDP port and the node's
+outbound interface — the command above fills the last one in for you. **Open
+that UDP port in the VPS firewall**: peers connect to it directly, and this is
+the one port PeerBlade cannot open for you.
 
-Then tell the agent which interface it manages, in `/etc/peerblade/agent.env`:
+**4.2 — Point the agent at the interface.** Replace `node.example.com` with the
+address your peers will connect to, then run the whole block as one command —
+it reads the real interface settings from the node and writes them into the
+agent configuration:
 
 ```bash
-PEERBLADE_MANAGED_INTERFACE=peerblade0
-PEERBLADE_MANAGED_ENDPOINT=node.example.com:51822
-PEERBLADE_MANAGED_ADDRESS_CIDR=10.8.0.1/24
+PEERBLADE_ENDPOINT_HOST=node.example.com
+PEERBLADE_INTERFACE=peerblade0
+
+sudo tee -a /etc/peerblade/agent.env >/dev/null <<EOF
+PEERBLADE_MANAGED_INTERFACE=$PEERBLADE_INTERFACE
+PEERBLADE_MANAGED_ENDPOINT=$PEERBLADE_ENDPOINT_HOST:$(sudo wg show "$PEERBLADE_INTERFACE" listen-port)
+PEERBLADE_MANAGED_ADDRESS_CIDR=$(ip -4 -brief addr show "$PEERBLADE_INTERFACE" | awk '{print $3}')
 PEERBLADE_MANAGED_ALLOWED_IPS=0.0.0.0/0
 PEERBLADE_STATE_DIRECTORY=/var/lib/peerblade-agent
+EOF
 ```
 
-The endpoint is what goes into peer configurations, so it must be the address
-peers can reach from the outside. Restart and check:
+The endpoint goes into every peer configuration, so it has to be an address
+reachable from the outside — a DNS name or the node's public IP, never
+`localhost` or a private address.
+
+**4.3 — Restart the agent and check it.**
 
 ```bash
 sudo systemctl restart peerblade-agent
-journalctl -u peerblade-agent -n 30
+journalctl -u peerblade-agent -n 30 --no-pager
 ```
+
+A healthy start reports the managed interface. If a message says
+`... is required for native peer management`, one of the four variables above is
+missing or empty — check what landed in the file:
+
+```bash
+sudo grep PEERBLADE_MANAGED /etc/peerblade/agent.env
+```
+
+You can now create peers for this server in the panel.
 
 The agent keeps its peers in `peers.json` inside the state directory and
 reconciles the interface against it on every start, so a reboot or a lost
 `wg` state does not lose peers.
+
+> **Reinstalling an agent.** Removing a server from the panel with the full
+> removal option deletes `/etc/peerblade/agent.env`, so a reinstalled agent
+> comes back without the settings from 4.2 and cannot create peers until you
+> add them again. The state directory survives, so once you do, the peers that
+> were on the node return with their names.
 
 ### 5. More nodes
 
@@ -222,15 +260,23 @@ you where it connects.
 
 ### Updates
 
-`PEERBLADE_IMAGE_TAG=latest` follows the newest release. Pin a version in `.env`
-for reproducible deployments — `PEERBLADE_IMAGE_TAG=0.1.0` — and raise it when
-you choose to update:
+`PEERBLADE_IMAGE_TAG=latest` follows the newest release, which is the default.
+Updating then means pulling the new images:
 
 ```bash
 cd /opt/peerblade
 sudo git pull                       # Compose file and proxy configuration
 sudo docker compose pull
 sudo docker compose up -d           # migrations run automatically
+```
+
+For reproducible deployments, pin a version instead and raise it when you
+choose to update — this sets the pin and applies it in one go:
+
+```bash
+cd /opt/peerblade
+sudo sed -i 's/^PEERBLADE_IMAGE_TAG=.*/PEERBLADE_IMAGE_TAG=0.1.0/' .env
+sudo docker compose pull && sudo docker compose up -d
 ```
 
 Agents update independently: re-run the install command from the panel on a
