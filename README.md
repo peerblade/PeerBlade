@@ -70,6 +70,68 @@ interface setup script for the nodes. There is no source tree to clone and
 nothing to compile — the services are published as container images on
 GHCR, and the node agent is attached to each GitHub release.
 
+### The short version
+
+The whole path, for those who want to see it before reading it. Everything runs
+on the servers, as root; each block is explained in the step of the same number
+below.
+
+```bash
+# 1. Control plane — on the panel server
+apt-get update && apt-get install -y curl git ca-certificates
+curl -fsSL https://get.docker.com | sh
+git clone https://github.com/peerblade/PeerBlade.git /opt/peerblade
+cd /opt/peerblade
+./bootstrap.sh panel.example.com          # your DNS name, already pointing here
+docker compose pull && docker compose up -d
+cat admin-credentials.txt                 # the login the proxy will ask for
+```
+
+```bash
+# 2. Open https://panel.example.com, create the administrator, then drop the
+#    extra gate — on the panel server
+sed -i 's/^PEERBLADE_AUTH_PROXY_MODE=.*/PEERBLADE_AUTH_PROXY_MODE=app/' .env
+docker compose up -d caddy
+```
+
+```bash
+# 3. Node — the panel gives this command with the token filled in
+curl -fsSL 'https://panel.example.com/install-agent.sh' | \
+  bash -s -- --url 'https://panel.example.com' --token '<enrollment token>'
+```
+
+```bash
+# 4. Node — the interface PeerBlade will manage
+apt-get update && apt-get install -y wireguard-tools iptables
+curl -fsSL -o /tmp/setup-wireguard.sh \
+  https://raw.githubusercontent.com/peerblade/PeerBlade/main/setup-wireguard.sh
+chmod +x /tmp/setup-wireguard.sh
+/tmp/setup-wireguard.sh peerblade0 10.8.0.1/24 51822 \
+  "$(ip route get 1.1.1.1 | grep -oP 'dev \K\S+')"
+
+outbound=$(ip route get 1.1.1.1 | grep -oP 'dev \K\S+')
+ufw allow 51822/udp
+ufw route allow in on peerblade0 out on "$outbound"
+ufw route allow in on "$outbound" out on peerblade0
+
+tee -a /etc/peerblade/agent.env >/dev/null <<EOF
+PEERBLADE_MANAGED_INTERFACE=peerblade0
+PEERBLADE_MANAGED_ENDPOINT=node.example.com:$(wg show peerblade0 listen-port)
+PEERBLADE_MANAGED_ADDRESS_CIDR=$(ip -4 -brief addr show peerblade0 | awk '{print $3}')
+PEERBLADE_MANAGED_ALLOWED_IPS=0.0.0.0/0
+PEERBLADE_MANAGED_DNS=1.1.1.1
+PEERBLADE_STATE_DIRECTORY=/var/lib/peerblade-agent
+EOF
+
+systemctl restart peerblade-agent
+```
+
+Two values are yours to fill in: `panel.example.com`, the name that resolves to
+the control plane, and `node.example.com`, the address peers will connect to.
+Everything else is read from the machine. If a step does not behave, the
+[troubleshooting ladder](#troubleshooting) names the command that identifies
+each failure.
+
 ### What you need
 
 Nothing on your own computer — every command below runs on the server over
@@ -254,13 +316,13 @@ ship an image with `ufw` enabled and everything but SSH and HTTP denied, which
 silently prevents any handshake. Skip this if `ufw status` says inactive:
 
 ```bash
+outbound=$(ip route get 1.1.1.1 | grep -oP 'dev \K\S+')
 ufw allow 51822/udp
-ufw route allow in on peerblade0 out on ens3
-ufw route allow in on ens3 out on peerblade0
+ufw route allow in on peerblade0 out on "$outbound"
+ufw route allow in on "$outbound" out on peerblade0
 ```
 
-Replace `ens3` with the node's outbound interface — `ip route get 1.1.1.1`
-prints it. The two kinds of rule do different jobs and both are needed: the
+The two kinds of rule do different jobs and both are needed: the
 first lets peers reach the node, the second lets their traffic pass *through*
 it. With only the first, the tunnel connects, the handshake succeeds and
 nothing loads — and the evidence is in `dmesg`:
