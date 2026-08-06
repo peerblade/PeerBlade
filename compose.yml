@@ -1,6 +1,6 @@
 # PeerBlade — production stack.
 # Images are pulled from GHCR; nothing is built locally.
-# Pin a release with PEERBLADE_IMAGE_TAG, for example PEERBLADE_IMAGE_TAG=0.1.1
+# Pin a release with PEERBLADE_IMAGE_TAG, for example PEERBLADE_IMAGE_TAG=0.2.0
 
 name: peerblade
 

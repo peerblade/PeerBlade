@@ -72,19 +72,19 @@ GHCR, and the node agent is attached to each GitHub release.
 
 ### What you need
 
-- 🐧 **A Linux host for the control plane** — Docker Engine with Compose v2
-  (`curl -fsSL https://get.docker.com | sudo sh` on a bare server), `git`,
-  ports 80 and 443 free, 2 GB RAM. Both `x86_64` and `arm64` are published, so
-  an Ampere or Graviton server works as well. Docker Desktop is not a fit: it
-  shares only a few host paths, and the Compose file mounts its proxy
-  configuration from the deployment directory.
-- 🌐 **A domain for the panel** — an `A` (and optionally `AAAA`) record pointing
-  at that host. It must resolve *before* the first start: Caddy requests a
-  Let's Encrypt certificate on boot.
+Nothing on your own computer — every command below runs on the server over
+SSH, and a freshly provisioned machine is the expected starting point.
+
+- 🖥 **A Linux server for the control plane** — Debian or Ubuntu with root
+  access, 2 GB RAM, ports 80 and 443 free. `x86_64` and `arm64` both work, so
+  the cheaper Ampere or Graviton instances are fine.
+- 🌐 **A DNS name pointing at it** — an `A` (and optionally `AAAA`) record. It
+  must resolve *before* the first start: Caddy requests a Let's Encrypt
+  certificate on boot.
 - 🐧 **One or more WireGuard nodes** — `x86_64` or `arm64` Linux with systemd
-  (tested on Ubuntu and Debian) and outbound HTTPS to the panel; the installer
-  picks the matching agent build. To let PeerBlade manage a dedicated
-  interface, the node also needs `wireguard-tools` and `iptables`.
+  and outbound HTTPS to the panel; the installer picks the matching agent
+  build. To let PeerBlade manage a dedicated interface, the node also needs
+  `wireguard-tools` and `iptables`.
 - 🔓 **An open UDP port on each node** for your peers — that one is for
   WireGuard itself, not for PeerBlade
 
@@ -95,38 +95,63 @@ not work: the panel needs a real certificate, because the session cookie is
 `Secure` and the agent installer refuses anything but HTTPS — that is the same
 channel agent tokens travel over.
 
+A laptop is not a substitute for the server: Let's Encrypt validates the domain
+from the outside, which a machine behind NAT cannot answer. Docker Desktop does
+not fit either — it shares only a few host paths, and the Compose file mounts
+its proxy configuration from the deployment directory.
+
 The control plane and a WireGuard node may live on the same machine, but keeping
 them apart is the better default.
 
 ### 1. Control plane
 
+Everything from here on happens on the server, as root — which is what a fresh
+machine gives you. As another user, prefix the commands with `sudo`. Open a
+session:
+
 ```bash
-# A freshly provisioned server usually has neither, and both are needed below.
-sudo apt-get update && sudo apt-get install -y git ca-certificates
-
-sudo git clone https://github.com/peerblade/PeerBlade.git /opt/peerblade
-cd /opt/peerblade
-
-# Generates .env, the PostgreSQL password and a Basic Auth administrator.
-# Credentials are written to admin-credentials.txt (mode 0600).
-sudo ./bootstrap.sh panel.example.com
-
-sudo docker compose pull
-sudo docker compose up -d
+ssh root@panel.example.com
 ```
 
-`bootstrap.sh` never overwrites an existing `.env` or `admin-credentials.txt`,
-so re-running it cannot wipe your credentials. If you prefer to fill things in
-by hand, copy [`.env.example`](.env.example) to `.env` instead — every variable
-is documented there.
+**1.1 — Prepare a bare server.** Skip what is already installed; on a fresh
+machine none of it is:
+
+```bash
+apt-get update && apt-get install -y curl git ca-certificates
+curl -fsSL https://get.docker.com | sh
+docker --version && docker compose version
+```
+
+**1.2 — Fetch the deployment bundle and generate the secrets.** Replace
+`panel.example.com` with your own DNS name — it goes into the certificate, the
+API origin and the address agents will report to:
+
+```bash
+git clone https://github.com/peerblade/PeerBlade.git /opt/peerblade
+cd /opt/peerblade
+./bootstrap.sh panel.example.com
+```
+
+`bootstrap.sh` writes `.env`, a PostgreSQL password and a Basic Auth
+administrator, whose credentials land in `admin-credentials.txt` (mode 0600).
+It never overwrites either file, so re-running it cannot wipe your credentials.
+If you prefer to fill things in by hand, copy [`.env.example`](.env.example) to
+`.env` instead — every variable is documented there.
+
+**1.3 — Start the stack.**
+
+```bash
+docker compose pull
+docker compose up -d
+```
 
 Bringing the stack up starts PostgreSQL, applies the database migrations
 (a one-shot `migrate` service that must complete before the API starts), then
 the API, the web panel and Caddy. Watch it settle:
 
 ```bash
-sudo docker compose ps
-sudo docker compose logs -f caddy
+docker compose ps
+docker compose logs -f caddy
 ```
 
 Certificate issuance is the step most likely to fail, and the Caddy log says
@@ -139,7 +164,7 @@ reverse proxy asks for a login and password first — that gate exists so a fres
 installation is never exposed before the account is created. Print them:
 
 ```bash
-sudo cat /opt/peerblade/admin-credentials.txt
+cat /opt/peerblade/admin-credentials.txt
 ```
 
 With an empty database the panel shows **Set up PeerBlade** and asks you to
@@ -150,8 +175,8 @@ Once you have the account, drop the extra gate:
 
 ```bash
 cd /opt/peerblade
-sudo sed -i 's/^PEERBLADE_AUTH_PROXY_MODE=.*/PEERBLADE_AUTH_PROXY_MODE=app/' .env
-sudo docker compose up -d caddy
+sed -i 's/^PEERBLADE_AUTH_PROXY_MODE=.*/PEERBLADE_AUTH_PROXY_MODE=app/' .env
+docker compose up -d caddy
 ```
 
 Further accounts are added from **Settings → Panel accounts**. There is no
@@ -160,9 +185,10 @@ database.
 
 ### 3. WireGuard node
 
-In the panel: **Servers → Connect a server**. It returns a one-time install
-command with the token already filled in — copy it from the panel and run it on
-the node. It looks like this:
+This step runs on the WireGuard node, not on the control plane host. In the
+panel: **Servers → Connect a server**. It returns a one-time install command
+with the token already filled in — copy it from the panel and run it there. It
+looks like this:
 
 ```bash
 curl -fsSL 'https://panel.example.com/install-agent.sh' | \
@@ -201,7 +227,7 @@ interface, so it is safe to run on a node that already has WireGuard:
 curl -fsSL -o /tmp/setup-wireguard.sh \
   https://raw.githubusercontent.com/peerblade/PeerBlade/main/setup-wireguard.sh
 chmod +x /tmp/setup-wireguard.sh
-sudo /tmp/setup-wireguard.sh peerblade0 10.8.0.1/24 51822 \
+/tmp/setup-wireguard.sh peerblade0 10.8.0.1/24 51822 \
   "$(ip route get 1.1.1.1 | grep -oP 'dev \K\S+')"
 ```
 
@@ -216,9 +242,9 @@ the port and the address are read from the node itself and written into the
 agent configuration:
 
 ```bash
-sudo tee -a /etc/peerblade/agent.env >/dev/null <<EOF
+tee -a /etc/peerblade/agent.env >/dev/null <<EOF
 PEERBLADE_MANAGED_INTERFACE=peerblade0
-PEERBLADE_MANAGED_ENDPOINT=node.example.com:$(sudo wg show peerblade0 listen-port)
+PEERBLADE_MANAGED_ENDPOINT=node.example.com:$(wg show peerblade0 listen-port)
 PEERBLADE_MANAGED_ADDRESS_CIDR=$(ip -4 -brief addr show peerblade0 | awk '{print $3}')
 PEERBLADE_MANAGED_ALLOWED_IPS=0.0.0.0/0
 PEERBLADE_STATE_DIRECTORY=/var/lib/peerblade-agent
@@ -233,7 +259,7 @@ IP, never `localhost` or a private address.
 **4.3 — Restart the agent and check it.**
 
 ```bash
-sudo systemctl restart peerblade-agent
+systemctl restart peerblade-agent
 journalctl -u peerblade-agent -n 30 --no-pager
 ```
 
@@ -242,7 +268,7 @@ A healthy start reports the managed interface. If a message says
 missing or empty — check what landed in the file:
 
 ```bash
-sudo grep PEERBLADE_MANAGED /etc/peerblade/agent.env
+grep PEERBLADE_MANAGED /etc/peerblade/agent.env
 ```
 
 You can now create peers for this server in the panel.
@@ -271,9 +297,9 @@ Updating then means pulling the new images:
 
 ```bash
 cd /opt/peerblade
-sudo git pull                       # Compose file and proxy configuration
-sudo docker compose pull
-sudo docker compose up -d           # migrations run automatically
+git pull                       # Compose file and proxy configuration
+docker compose pull
+docker compose up -d           # migrations run automatically
 ```
 
 For reproducible deployments, pin a version instead and raise it when you
@@ -281,8 +307,8 @@ choose to update — this sets the pin and applies it in one go:
 
 ```bash
 cd /opt/peerblade
-sudo sed -i 's/^PEERBLADE_IMAGE_TAG=.*/PEERBLADE_IMAGE_TAG=0.1.1/' .env
-sudo docker compose pull && sudo docker compose up -d
+sed -i 's/^PEERBLADE_IMAGE_TAG=.*/PEERBLADE_IMAGE_TAG=0.2.0/' .env
+docker compose pull && docker compose up -d
 ```
 
 Agents update independently: re-run the install command from the panel on a
@@ -294,8 +320,8 @@ the agent restarts — the interface belongs to the kernel, not to the process.
 Everything worth keeping is in PostgreSQL:
 
 ```bash
-sudo mkdir -p /root/peerblade-backups
-sudo docker compose exec -T postgres \
+mkdir -p /root/peerblade-backups
+docker compose exec -T postgres \
   pg_dump -U peerblade -d peerblade -Fc \
   > /root/peerblade-backups/peerblade-$(date +%F).dump
 ```
