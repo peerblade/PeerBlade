@@ -387,6 +387,71 @@ Keep `.env` alongside the dump — without `POSTGRES_PASSWORD` the volume is not
 much use. Peer private keys are *not* in the dump by design; they live on the
 nodes and in the configurations you handed out.
 
+## Troubleshooting
+
+Every failure below has one command that identifies it. Work down the list: each
+step assumes the ones above it passed, and the last one is the only place where
+the answer lies outside your server.
+
+**The panel does not open.** Caddy says why, and it is almost always the
+certificate — DNS not pointing at the host yet, or port 80 unreachable from the
+outside, which is how Let's Encrypt validates the domain.
+
+```bash
+docker compose logs --tail 50 caddy
+```
+
+**A server stays "waiting for the agent".** The agent dials out to the panel, so
+this is about outbound HTTPS from the node, not about anything inbound.
+
+```bash
+systemctl status peerblade-agent --no-pager
+journalctl -u peerblade-agent -n 50 --no-pager
+```
+
+**A peer never connects — no handshake.** On the node, a peer with no
+`latest handshake` line has never been heard from: its packets are not reaching
+the UDP port. Check the firewall on the node first, then whatever filtering your
+host applies in front of it.
+
+```bash
+wg show
+ufw status                  # is the peer port allowed?
+```
+
+**The handshake works, but nothing loads.** Traffic reaches the node and dies
+there. The three things that carry it further:
+
+```bash
+dmesg | grep -i "UFW BLOCK" | tail -5      # forwarding refused?
+sysctl net.ipv4.ip_forward                 # must be 1
+iptables -t nat -S POSTROUTING | grep -i masquerade
+```
+
+A `UFW BLOCK` line naming your WireGuard interface means the firewall lets peers
+*reach* the node but not pass *through* it — see the forwarding rules in step
+4.1. In the masquerade rule, the outbound interface must be the real one:
+compare it with `ip route get 1.1.1.1`. A mismatch leaves replies with nowhere
+to return to.
+
+**Everything above checks out and traffic still does not leave.** Watch what
+actually goes out while a peer is browsing:
+
+```bash
+tcpdump -ni <outbound interface> -c 10 'port 53 or icmp'
+```
+
+The source address decides it. Your node's public address means the node is
+doing its job, and the traffic is being dropped beyond it — compare against a
+node at another host before concluding that, since it is the one thing you
+cannot fix from the server. A peer address such as `10.8.0.2` instead means the
+masquerade rule did not apply, and the packets are being discarded as
+private-source traffic.
+
+**Pings work but pages do not load.** Small packets pass and large ones vanish:
+that is the path MTU. Add `MTU = 1380` to the `[Interface]` section of the peer
+configuration.
+
 ## Security model
 
 - 🔑 Peer private keys and preshared keys never leave your node
