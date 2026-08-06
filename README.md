@@ -204,25 +204,23 @@ the one port PeerBlade cannot open for you.
 
 **4.2 — Point the agent at the interface.** Replace `node.example.com` with the
 address your peers will connect to, then run the whole block as one command —
-it reads the real interface settings from the node and writes them into the
+the port and the address are read from the node itself and written into the
 agent configuration:
 
 ```bash
-PEERBLADE_ENDPOINT_HOST=node.example.com
-PEERBLADE_INTERFACE=peerblade0
-
 sudo tee -a /etc/peerblade/agent.env >/dev/null <<EOF
-PEERBLADE_MANAGED_INTERFACE=$PEERBLADE_INTERFACE
-PEERBLADE_MANAGED_ENDPOINT=$PEERBLADE_ENDPOINT_HOST:$(sudo wg show "$PEERBLADE_INTERFACE" listen-port)
-PEERBLADE_MANAGED_ADDRESS_CIDR=$(ip -4 -brief addr show "$PEERBLADE_INTERFACE" | awk '{print $3}')
+PEERBLADE_MANAGED_INTERFACE=peerblade0
+PEERBLADE_MANAGED_ENDPOINT=node.example.com:$(sudo wg show peerblade0 listen-port)
+PEERBLADE_MANAGED_ADDRESS_CIDR=$(ip -4 -brief addr show peerblade0 | awk '{print $3}')
 PEERBLADE_MANAGED_ALLOWED_IPS=0.0.0.0/0
 PEERBLADE_STATE_DIRECTORY=/var/lib/peerblade-agent
 EOF
 ```
 
-The endpoint goes into every peer configuration, so it has to be an address
-reachable from the outside — a DNS name or the node's public IP, never
-`localhost` or a private address.
+If you named the interface something other than `peerblade0` in 4.1, replace it
+in all three places. The endpoint goes into every peer configuration, so it has
+to be an address reachable from the outside — a DNS name or the node's public
+IP, never `localhost` or a private address.
 
 **4.3 — Restart the agent and check it.**
 
