@@ -261,6 +261,7 @@ PEERBLADE_MANAGED_INTERFACE=peerblade0
 PEERBLADE_MANAGED_ENDPOINT=node.example.com:$(wg show peerblade0 listen-port)
 PEERBLADE_MANAGED_ADDRESS_CIDR=$(ip -4 -brief addr show peerblade0 | awk '{print $3}')
 PEERBLADE_MANAGED_ALLOWED_IPS=0.0.0.0/0
+PEERBLADE_MANAGED_DNS=1.1.1.1
 PEERBLADE_STATE_DIRECTORY=/var/lib/peerblade-agent
 EOF
 ```
@@ -269,6 +270,14 @@ If you named the interface something other than `peerblade0` in 4.1, replace it
 in all three places. The endpoint goes into every peer configuration, so it has
 to be an address reachable from the outside — a DNS name or the node's public
 IP, never `localhost` or a private address.
+
+`PEERBLADE_MANAGED_ALLOWED_IPS=0.0.0.0/0` means a full tunnel: everything the
+peer sends travels through the node. That makes `PEERBLADE_MANAGED_DNS`
+practically mandatory — without it the client keeps its previous resolver,
+which usually sits on its local network and becomes unreachable the moment the
+tunnel comes up. The symptom is a connected tunnel with no working internet.
+Put any resolver you trust there; both values end up in every configuration the
+panel issues from now on, and configurations issued earlier keep what they had.
 
 **4.3 — Restart the agent and check it.**
 
