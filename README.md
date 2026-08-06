@@ -248,17 +248,29 @@ wg show peerblade0
 The arguments are the interface name, its address, the UDP port and the node's
 outbound interface — the command above fills the last one in for you.
 
-**Open that UDP port.** Peers connect to it directly, and it is the one port
-PeerBlade cannot open for you. Many providers ship an image with `ufw` enabled
-and everything but SSH and HTTP denied, which silently prevents any handshake:
+**Open the port, and allow forwarding.** Peers connect to the UDP port
+directly, and it is the one port PeerBlade cannot open for you. Many providers
+ship an image with `ufw` enabled and everything but SSH and HTTP denied, which
+silently prevents any handshake. Skip this if `ufw status` says inactive:
 
 ```bash
-ufw status                  # skip the rest if inactive
 ufw allow 51822/udp
+ufw route allow in on peerblade0 out on ens3
+ufw route allow in on ens3 out on peerblade0
+```
+
+Replace `ens3` with the node's outbound interface — `ip route get 1.1.1.1`
+prints it. The two kinds of rule do different jobs and both are needed: the
+first lets peers reach the node, the second lets their traffic pass *through*
+it. With only the first, the tunnel connects, the handshake succeeds and
+nothing loads — and the evidence is in `dmesg`:
+
+```
+[UFW BLOCK] IN=peerblade0 OUT=ens3 SRC=10.8.0.2 DST=1.1.1.1 PROTO=UDP DPT=53
 ```
 
 If the provider also has a firewall of its own — a cloud security group or DDoS
-filtering — the port has to be open there too.
+filtering — the UDP port has to be open there too.
 
 **4.2 — Point the agent at the interface.** Replace `node.example.com` with the
 address your peers will connect to, then run the whole block as one command —
