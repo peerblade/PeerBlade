@@ -72,16 +72,19 @@ GHCR, and the node agent is attached to each GitHub release.
 
 ### What you need
 
-- 🐧 **A Linux host for the control plane** — x86_64 with Docker Engine and
-  Compose v2, ports 80 and 443 free, 2 GB RAM. The published images are
-  `linux/amd64` only, so an ARM server (Ampere, Graviton, Hetzner CAX) will
-  refuse to start them with `no matching manifest for linux/arm64`.
+- 🐧 **A Linux host for the control plane** — Docker Engine with Compose v2
+  (`curl -fsSL https://get.docker.com | sudo sh` on a bare server), `git`,
+  ports 80 and 443 free, 2 GB RAM. Both `x86_64` and `arm64` are published, so
+  an Ampere or Graviton server works as well. Docker Desktop is not a fit: it
+  shares only a few host paths, and the Compose file mounts its proxy
+  configuration from the deployment directory.
 - 🌐 **A domain for the panel** — an `A` (and optionally `AAAA`) record pointing
   at that host. It must resolve *before* the first start: Caddy requests a
   Let's Encrypt certificate on boot.
-- 🐧 **One or more WireGuard nodes** — x86_64 Linux with systemd (tested on
-  Ubuntu and Debian) and outbound HTTPS to the panel. To let PeerBlade manage a
-  dedicated interface, the node also needs `wireguard-tools` and `iptables`.
+- 🐧 **One or more WireGuard nodes** — `x86_64` or `arm64` Linux with systemd
+  (tested on Ubuntu and Debian) and outbound HTTPS to the panel; the installer
+  picks the matching agent build. To let PeerBlade manage a dedicated
+  interface, the node also needs `wireguard-tools` and `iptables`.
 - 🔓 **An open UDP port on each node** for your peers — that one is for
   WireGuard itself, not for PeerBlade
 
@@ -98,6 +101,9 @@ them apart is the better default.
 ### 1. Control plane
 
 ```bash
+# A freshly provisioned server usually has neither, and both are needed below.
+sudo apt-get update && sudo apt-get install -y git ca-certificates
+
 sudo git clone https://github.com/peerblade/PeerBlade.git /opt/peerblade
 cd /opt/peerblade
 
