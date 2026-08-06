@@ -246,9 +246,19 @@ wg show peerblade0
 ```
 
 The arguments are the interface name, its address, the UDP port and the node's
-outbound interface — the command above fills the last one in for you. **Open
-that UDP port in the VPS firewall**: peers connect to it directly, and this is
-the one port PeerBlade cannot open for you.
+outbound interface — the command above fills the last one in for you.
+
+**Open that UDP port.** Peers connect to it directly, and it is the one port
+PeerBlade cannot open for you. Many providers ship an image with `ufw` enabled
+and everything but SSH and HTTP denied, which silently prevents any handshake:
+
+```bash
+ufw status                  # skip the rest if inactive
+ufw allow 51822/udp
+```
+
+If the provider also has a firewall of its own — a cloud security group or DDoS
+filtering — the port has to be open there too.
 
 **4.2 — Point the agent at the interface.** Replace `node.example.com` with the
 address your peers will connect to, then run the whole block as one command —
@@ -284,6 +294,18 @@ panel issues from now on, and configurations issued earlier keep what they had.
 ```bash
 systemctl restart peerblade-agent
 journalctl -u peerblade-agent -n 30 --no-pager
+```
+
+Once you hand a configuration to a device, `wg show` on the node tells you
+whether it ever arrived: a peer with no `latest handshake` line has never
+reached the node, which is a firewall or endpoint problem rather than anything
+inside PeerBlade. If the handshake is there but nothing loads, check that
+forwarding survives the firewall — `ufw` defaults to dropping forwarded
+packets:
+
+```bash
+wg show
+iptables -S FORWARD | head
 ```
 
 A healthy start reports the managed interface. If a message says
