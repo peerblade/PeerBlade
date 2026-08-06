@@ -273,7 +273,7 @@ choose to update — this sets the pin and applies it in one go:
 
 ```bash
 cd /opt/peerblade
-sudo sed -i 's/^PEERBLADE_IMAGE_TAG=.*/PEERBLADE_IMAGE_TAG=0.1.0/' .env
+sudo sed -i 's/^PEERBLADE_IMAGE_TAG=.*/PEERBLADE_IMAGE_TAG=0.1.1/' .env
 sudo docker compose pull && sudo docker compose up -d
 ```
 
