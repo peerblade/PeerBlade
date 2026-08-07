@@ -1,7 +1,11 @@
 # PeerBlade
 
-**Self-hosted control plane for WireGuard.** One panel for your nodes, peers and
-configurations — running in your own infrastructure.
+**PeerBlade is a proprietary self-hosted control plane for WireGuard.** One
+panel for your nodes, peers and configurations — running in your own
+infrastructure.
+
+This repository contains the product documentation and everything needed to
+deploy it. The source code is not open source and is not published here.
 
 🌐 [peerblade.com](https://peerblade.com) · ❓ [FAQ](https://peerblade.com/faq)
 · ✉️ [info@peerblade.com](mailto:info@peerblade.com)
