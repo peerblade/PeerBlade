@@ -469,6 +469,53 @@ Keep `.env` alongside the dump — without `POSTGRES_PASSWORD` the volume is not
 much use. Peer private keys are *not* in the dump by design; they live on the
 nodes and in the configurations you handed out.
 
+## Uninstalling PeerBlade
+
+PeerBlade deliberately cannot remove itself from the browser: the containers
+have no Docker socket and no access to `/opt/peerblade` on the host. Choose the
+terminal scenario that matches what you actually want.
+
+### Stop it temporarily
+
+```bash
+cd /opt/peerblade
+docker compose stop
+```
+
+Start the same installation again with `docker compose start`.
+
+### Remove the containers but keep the data
+
+```bash
+cd /opt/peerblade
+docker compose down --remove-orphans
+```
+
+PostgreSQL and Caddy volumes, `.env` and the deployment files remain. Restore
+the panel later with `docker compose up -d`.
+
+### Permanently remove the control plane
+
+First create the backup shown above. If this host was connected with
+`--with-node`, open its server in PeerBlade and run the full agent-removal
+command **before** stopping the panel. Removing the control plane does not
+remove an agent, a WireGuard interface, peer keys or working tunnels.
+
+After checking that the backup is readable and that you are in the expected
+directory, remove the stack and its named volumes:
+
+```bash
+cd /opt/peerblade
+docker compose down --volumes --remove-orphans
+cd /opt
+sudo rm -rf -- /opt/peerblade
+```
+
+This permanently deletes the PeerBlade PostgreSQL database, Caddy state and
+installation secrets. It does not uninstall Docker and does not affect other
+Docker projects or WireGuard configurations on the host. Unused PeerBlade
+container images may be removed later with normal Docker image-pruning tools.
+
 ## Troubleshooting
 
 Every failure below has one command that identifies it. Work down the list: each
