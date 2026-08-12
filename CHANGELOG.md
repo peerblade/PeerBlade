@@ -10,6 +10,10 @@ agent from the server page after the panel has been updated.
 
 ## [Unreleased]
 
+No changes yet.
+
+## [0.5.2] - 2026-08-12
+
 ### Panel
 
 - Added a removal guide to Settings without granting the panel access to the
@@ -22,12 +26,15 @@ agent from the server page after the panel has been updated.
 - Added safe removal instructions for stopping PeerBlade, retaining its data,
   or permanently deleting the control plane.
 
+### Agent
+
+- No functional changes.
+
 ### Upgrade notes
 
 - Agent update required: **no**.
 - Database migration required: **no**.
-- The setup-token fix is delivered by the public deployment bundle and does not
-  require rebuilding the v0.5.1 images.
+- Update the panel with `docker compose pull && docker compose up -d`.
 
 ## [0.5.1] - 2026-08-12
 
@@ -182,4 +189,3 @@ agent from the server page after the panel has been updated.
 ### Upgrade notes
 
 - Initial release.
-
