@@ -10,6 +10,9 @@ deploy it. The source code is not open source and is not published here.
 🌐 [peerblade.com](https://peerblade.com) · ❓ [FAQ](https://peerblade.com/faq)
 · ✉️ [info@peerblade.com](mailto:info@peerblade.com)
 
+📋 [Changelog](CHANGELOG.md) — panel, agent and deployment changes with
+upgrade requirements for every release.
+
 ---
 
 ## What it is
@@ -446,7 +449,7 @@ choose to update — this sets the pin and applies it in one go:
 
 ```bash
 cd /opt/peerblade
-sed -i 's/^PEERBLADE_IMAGE_TAG=.*/PEERBLADE_IMAGE_TAG=0.4.0/' .env
+sed -i 's/^PEERBLADE_IMAGE_TAG=.*/PEERBLADE_IMAGE_TAG=0.5.1/' .env
 docker compose pull && docker compose up -d
 ```
 
