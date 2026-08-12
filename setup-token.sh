@@ -35,13 +35,14 @@ main() {
   setup_token_hash=$(printf '%s' "$setup_token" | openssl dgst -sha256 -r | awk '{print $1}')
   setup_token_expires_at=$(( $(date +%s) + setup_token_ttl_seconds ))
   temporary_file=$(mktemp "$script_directory/.env.setup-token.XXXXXX")
-  trap 'rm -f "$temporary_file"' EXIT
+  trap 'rm -f -- "${temporary_file:-}"' EXIT
 
   grep -Ev '^AUTH_SETUP_TOKEN_(HASH|EXPIRES_AT)=' "$environment_file" >"$temporary_file"
   printf '\nAUTH_SETUP_TOKEN_HASH=%s\n' "$setup_token_hash" >>"$temporary_file"
   printf 'AUTH_SETUP_TOKEN_EXPIRES_AT=%s\n' "$setup_token_expires_at" >>"$temporary_file"
   chmod 0600 "$temporary_file"
   mv "$temporary_file" "$environment_file"
+  trap - EXIT
 
   printf 'URL=https://%s/setup#token=%s\n' "$domain" "$setup_token" >"$setup_url_file"
   chmod 0600 "$setup_url_file"
