@@ -61,6 +61,8 @@ services:
       AGENT_OFFLINE_AFTER_SECONDS: ${AGENT_OFFLINE_AFTER_SECONDS:-90}
       AGENT_ENROLLMENT_TTL_MINUTES: ${AGENT_ENROLLMENT_TTL_MINUTES:-15}
       AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-168}
+      AUTH_SETUP_TOKEN_HASH: ${AUTH_SETUP_TOKEN_HASH-}
+      AUTH_SETUP_TOKEN_EXPIRES_AT: ${AUTH_SETUP_TOKEN_EXPIRES_AT-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -124,7 +126,7 @@ services:
       - '443:443'
       - '443:443/udp'
     volumes:
-      - ./Caddyfile.${PEERBLADE_AUTH_PROXY_MODE:-basic}:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile.${PEERBLADE_AUTH_PROXY_MODE:-app}:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

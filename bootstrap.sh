@@ -4,11 +4,9 @@
 
 set -euo pipefail
 
-readonly caddy_image="caddy:2.11.4-alpine"
-
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 environment_file="$script_directory/.env"
-credentials_file="$script_directory/admin-credentials.txt"
+setup_url_file="$script_directory/setup-url.txt"
 
 fail() {
   echo "peerblade bootstrap: $*" >&2
@@ -24,8 +22,6 @@ main() {
   [[ ${EUID:-$(id -u)} -eq 0 ]] || fail "run this command as root"
 
   local domain=$1
-  local admin_password
-  local admin_password_hash
   local postgres_password
 
   [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] || \
@@ -34,7 +30,7 @@ main() {
 
   # Never overwrite existing secrets: re-running must not lock you out.
   [[ ! -e "$environment_file" ]] || fail "$environment_file already exists"
-  [[ ! -e "$credentials_file" ]] || fail "$credentials_file already exists"
+  [[ ! -e "$setup_url_file" ]] || fail "$setup_url_file already exists"
 
   require_command docker
   require_command openssl
@@ -42,23 +38,14 @@ main() {
   docker network inspect peerblade-edge >/dev/null 2>&1 || \
     docker network create peerblade-edge >/dev/null
 
-  admin_password=$(openssl rand -hex 16)
   postgres_password=$(openssl rand -hex 32)
-
-  docker pull "$caddy_image" >/dev/null
-  admin_password_hash=$(
-    docker run --rm "$caddy_image" \
-      caddy hash-password --plaintext "$admin_password"
-  )
 
   umask 077
 
   {
     printf 'PEERBLADE_DOMAIN=%s\n' "$domain"
     printf 'PEERBLADE_IMAGE_TAG=latest\n'
-    printf 'PEERBLADE_AUTH_PROXY_MODE=basic\n'
-    printf 'PEERBLADE_ADMIN_USER=admin\n'
-    printf "PEERBLADE_ADMIN_PASSWORD_HASH='%s'\n" "$admin_password_hash"
+    printf 'PEERBLADE_AUTH_PROXY_MODE=app\n'
     printf 'PEERBLADE_API_HOSTNAME=peerblade-api\n'
     printf 'PEERBLADE_WEB_HOSTNAME=peerblade-web\n'
     printf '\n'
@@ -71,17 +58,12 @@ main() {
     printf 'AUTH_SESSION_TTL_HOURS=168\n'
   } >"$environment_file"
 
-  {
-    printf 'URL=https://%s\n' "$domain"
-    printf 'USERNAME=admin\n'
-    printf 'PASSWORD=%s\n' "$admin_password"
-  } >"$credentials_file"
-
-  chmod 0600 "$environment_file" "$credentials_file"
+  chmod 0600 "$environment_file"
+  "$script_directory/setup-token.sh" "$domain"
 
   echo "Secrets created."
   echo "Environment:      $environment_file"
-  echo "Basic Auth login: $credentials_file"
+  echo "One-time setup URL: $setup_url_file"
   echo
   echo "Next: docker compose pull && docker compose up -d"
 }

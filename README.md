@@ -179,19 +179,19 @@ docker --version && docker compose version
 API origin and the address agents will report to:
 
 ```bash
-git clone https://github.com/peerblade/PeerBlade.git /opt/peerblade
+sudo git clone https://github.com/peerblade/PeerBlade.git /opt/peerblade
 cd /opt/peerblade
-./bootstrap.sh panel.example.com
+sudo ./bootstrap.sh panel.example.com
 ```
 
 <details>
 <summary>What bootstrap.sh writes</summary>
 
-`.env`, a PostgreSQL password and a Basic Auth administrator, whose credentials
-land in `admin-credentials.txt` (mode 0600). It never overwrites either file, so
-re-running it cannot wipe your credentials. To fill things in by hand instead,
-copy [`.env.example`](.env.example) to `.env` — every variable is documented
-there.
+`.env`, a PostgreSQL password and a random first-run token. The raw token lands
+only in `setup-url.txt`; `.env` stores its SHA-256 hash and expiry. Both files
+use mode `0600`, and bootstrap never overwrites them. To fill things in by hand
+instead, copy [`.env.example`](.env.example) to `.env`, then run
+`sudo ./setup-token.sh panel.example.com`.
 
 </details>
 
@@ -222,29 +222,31 @@ why — almost always DNS not yet pointing at the host, or port 80 blocked.
 
 ### 2. First administrator
 
-Open `https://panel.example.com`. The reverse proxy asks for a login and
-password first — print them:
+Print the one-time setup link on the server:
 
 ```bash
-cat /opt/peerblade/admin-credentials.txt
+sudo cat /opt/peerblade/setup-url.txt
 ```
 
-With an empty database the panel shows **Set up PeerBlade** and asks you to
-create the administrator of this installation. Once you have the account, drop
-the extra gate:
+Open that URL. With an empty database the panel shows **Set up PeerBlade** and
+asks you to create the administrator of this installation. The link expires
+after 60 minutes and becomes useless as soon as the administrator exists.
+
+If the link expires before setup, replace it and restart only the API:
 
 ```bash
 cd /opt/peerblade
-sed -i 's/^PEERBLADE_AUTH_PROXY_MODE=.*/PEERBLADE_AUTH_PROXY_MODE=app/' .env
-docker compose up -d caddy
+sudo ./setup-token.sh
+docker compose up -d --force-recreate api
 ```
 
 <details>
-<summary>About the two gates and further accounts</summary>
+<summary>Why the setup link is safe, and how further accounts work</summary>
 
-While `PEERBLADE_AUTH_PROXY_MODE=basic` the proxy asks for a password of its
-own, so a fresh installation is never exposed before its administrator exists.
-Switching to `app` leaves the application login alone in front of the panel.
+The token contains 256 random bits and stays after `#` in the URL, so it is not
+part of the initial HTTP request or reverse-proxy access logs. The browser sends
+it only in the administrator-creation request; PeerBlade stores and compares
+only its SHA-256 hash. Keep `setup-url.txt` private and delete it after setup.
 
 After the first administrator, the initial setup is blocked at the database
 level and the panel shows the sign-in form instead. Further accounts are added
