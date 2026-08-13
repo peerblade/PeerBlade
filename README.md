@@ -136,6 +136,12 @@ refuses to start if the name does not resolve to this host or if ports 80 and
 443 are taken, and re-running it updates an existing installation rather than
 overwriting it.
 
+After the first successful deployment it sends one anonymous receipt to
+`peerblade.com`: a random installation UUID used only to count unique
+deployments. No domain, IP, account, node, peer or traffic data is included,
+and updates do not send it again. Pass `--no-installation-receipt` to opt out;
+the manual deployment steps send nothing.
+
 ```bash
 curl -fsSL https://peerblade.com/install.sh | sudo bash -s -- panel.example.com
 ```
