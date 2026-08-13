@@ -8,7 +8,7 @@ This repository contains the product documentation and everything needed to
 deploy it. The source code is not open source and is not published here.
 
 🌐 [peerblade.com](https://peerblade.com) · ❓ [FAQ](https://peerblade.com/faq)
-· ✉️ [info@peerblade.com](mailto:info@peerblade.com)
+· ✉️ [feedback@peerblade.com](mailto:feedback@peerblade.com)
 
 📋 [Changelog](CHANGELOG.md) — panel, agent and deployment changes with
 upgrade requirements for every release.
@@ -648,7 +648,7 @@ authoritative wording is in the [Terms](https://peerblade.com/terms).
 Under active development. The feature set may change, and interfaces may move
 before a stable release.
 
-Questions, bug reports and feedback: **[info@peerblade.com](mailto:info@peerblade.com)**
+Questions, bug reports and feedback: **[feedback@peerblade.com](mailto:feedback@peerblade.com)**
 
 ---
 
