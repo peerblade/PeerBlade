@@ -1,0 +1,89 @@
+name: Agent release
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Agent tag, for example agent-v0.6.1'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build:
+    name: Build agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          [[ "$tag" =~ ^agent-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Agent tag must look like agent-v0.6.1, got: $tag" >&2
+            exit 1
+          }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#agent-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - name: Test
+        working-directory: agent
+        run: |
+          test -z "$(gofmt -l .)"
+          go test ./...
+          go vet ./...
+          bash -n deploy/*.sh scripts/*.sh
+
+      - name: Build Linux binaries
+        working-directory: agent
+        env:
+          AGENT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          for architecture in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$architecture" go build \
+              -trimpath \
+              -ldflags "-s -w -X main.agentVersion=$AGENT_VERSION" \
+              -o "dist/peerblade-agent-linux-$architecture" .
+          done
+          cd dist
+          sha256sum peerblade-agent-linux-amd64 > peerblade-agent-linux-amd64.sha256
+          sha256sum peerblade-agent-linux-arm64 > peerblade-agent-linux-arm64.sha256
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: 'agent/dist/peerblade-agent-linux-*'
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            agent/dist/peerblade-agent-linux-amd64
+            agent/dist/peerblade-agent-linux-amd64.sha256
+            agent/dist/peerblade-agent-linux-arm64
+            agent/dist/peerblade-agent-linux-arm64.sha256

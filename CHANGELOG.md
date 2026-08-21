@@ -10,7 +10,198 @@ agent from the server page after the panel has been updated.
 
 ## [Unreleased]
 
-No changes yet.
+### Agent
+
+- Published the complete Linux node-agent source, tests, installer scripts,
+  protocol documentation and security model under GPL-3.0-or-later.
+- Added a public amd64/arm64 release workflow with checksums and build
+  provenance attestations.
+
+### Documentation
+
+- Clarified the split-source model: the node agent is open source while the
+  web panel and control-plane API remain proprietary.
+
+## [0.6.0] - 2026-08-17
+
+### Panel
+
+- Added an actionable notification when a node runs an older agent than the
+  version bundled with the installed PeerBlade release.
+- Notification read state is now stored per administrator in PostgreSQL and
+  stays synchronized across browsers and devices.
+- Server cards are displayed in a single column while retaining the existing
+  compact expansion for larger node collections.
+- Peer filters now wrap cleanly on narrow screens, disabled access switches
+  use the neutral state colour, and peer creation uses a generic device name.
+
+### Upgrade notes
+
+- Agent update required: **no**.
+- Database migration required: **yes**; it is applied automatically when the
+  control plane starts.
+
+## [0.5.9] - 2026-08-17
+
+### Panel
+
+- Installation receipts are now stored even when email delivery is not yet
+  configured or is temporarily unavailable, and remain pending for a later
+  notification attempt.
+- Server cards now open from their full surface and use the same minimal
+  icon-action treatment as the dashboard header.
+- Peer lists now show the primary tunnel IP directly below the peer name.
+
+### Website
+
+- Updated the Interface preview with the clickable server-card treatment,
+  minimal actions and fictional peer IP addresses used by the panel.
+
+### Upgrade notes
+
+- Agent update required: **no**.
+- Database migration required: **no**.
+- Update the panel with `docker compose pull && docker compose up -d`.
+
+## [0.5.8] - 2026-08-13
+
+### Website
+
+- Updated the Interface preview to match the real dashboard header, including
+  the notifications bell, unread indicator and settings gear.
+- Changed the website contact address to `contact@peerblade.com`.
+- Made the English privacy policy and terms the prevailing versions when the
+  English and Russian texts differ.
+
+### Panel
+
+- Switched server collections larger than four nodes to a compact list that
+  initially shows five entries and expands in place without hiding the
+  connect-server form.
+
+### Documentation
+
+- Added `feedback@peerblade.com` as the public GitHub feedback address.
+
+### Upgrade notes
+
+- Agent update required: **no**.
+- Database migration required: **yes**; it is applied automatically when the
+  control plane starts.
+- Update the panel with `docker compose pull && docker compose up -d`.
+
+## [0.5.7] - 2026-08-13
+
+### Agent
+
+- Keeps heartbeat, snapshot and command polling workers alive across temporary
+  control-plane or network failures and retries them automatically.
+- Updated the systemd safety net to restart the agent indefinitely instead of
+  leaving it stopped after five consecutive failures.
+
+### Upgrade notes
+
+- Agent update required: **yes**. Reinstall the agent from the server page
+  after updating the panel to install agent `0.6.1` and the updated systemd
+  unit.
+- Database migration required: **no**.
+- Update the panel with `docker compose pull && docker compose up -d`.
+
+## [0.5.6] - 2026-08-13
+
+### Panel
+
+- Added a Notifications page backed by live monitoring signals, with
+  actionable node and peer links, per-account read state and an unread marker
+  in the dashboard header.
+- Linked the Monitoring health summary to the concrete notifications that
+  require attention.
+- Widened the Activity result column for more consistent status badges.
+
+### Agent
+
+- No functional changes.
+
+### Upgrade notes
+
+- Agent update required: **no**.
+- Database migration required: **no**.
+- Update the panel with `docker compose pull && docker compose up -d`.
+
+## [0.5.5] - 2026-08-13
+
+### Panel
+
+- Reinstallation commands now preserve the actual WireGuard interface,
+  listen port and inferred /24 subnet of an existing or imported node instead
+  of always falling back to `peerblade0` and `10.44.0.1/24`.
+- Traffic charts now include an adaptive vertical byte scale and horizontal
+  grid lines for easier comparison across time periods.
+
+### Agent
+
+- No functional changes.
+
+### Upgrade notes
+
+- Agent update required: **no**.
+- Database migration required: **no**.
+- Update the panel with `docker compose pull && docker compose up -d`.
+
+## [0.5.4] - 2026-08-13
+
+### Website
+
+- Strengthened the hero positioning around PeerBlade as a self-hosted
+  WireGuard control plane in both English and Russian.
+- Added documentation, deployment, FAQ and GitHub navigation, plus a compact
+  FAQ section with structured data on the landing page.
+- Added a visible path to the step-by-step guide and public deployment bundle
+  alongside the one-command installation flow.
+- Added sticky navigation with active-section highlighting, scroll-aware
+  visibility and a button for returning to the top of the page.
+- Added feature-card reveal motion and optimized continuous animations,
+  scrolling work and mobile rendering for lower-powered devices.
+- Reworked the fictional interface previews for narrow screens so peer data is
+  presented as readable cards rather than clipped desktop tables.
+
+### Panel
+
+- Rebuilt the mobile peer registry as responsive cards without horizontal
+  scrolling.
+- Improved mobile node cards, headings, actions and spacing on the Servers
+  page.
+
+### Agent
+
+- No functional changes.
+
+### Upgrade notes
+
+- Agent update required: **no**.
+- Database migration required: **no**.
+- Update the panel with `docker compose pull && docker compose up -d`.
+
+## [0.5.3] - 2026-08-12
+
+### Panel
+
+- Refined the landing page and control plane palette with deeper mint accents,
+  warmer surfaces and stronger contrast.
+- Unified borders across floating dashboard surfaces and the interface previews
+  shown on the landing page.
+- Simplified the landing navigation background and polished server cards,
+  outlined actions, language controls and the status refresh button.
+
+### Agent
+
+- No functional changes.
+
+### Upgrade notes
+
+- Agent update required: **no**.
+- Database migration required: **no**.
+- Update the panel with `docker compose pull && docker compose up -d`.
 
 ## [0.5.2] - 2026-08-12
 

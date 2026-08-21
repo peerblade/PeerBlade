@@ -4,8 +4,9 @@
 set -euo pipefail
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-environment_file="$script_directory/.env"
-setup_url_file="$script_directory/setup-url.txt"
+target_directory=${PEERBLADE_SETUP_DIRECTORY:-$script_directory}
+environment_file="$target_directory/.env"
+setup_url_file="$target_directory/setup-url.txt"
 readonly setup_token_ttl_seconds=3600
 
 fail() {
@@ -34,7 +35,7 @@ main() {
   setup_token=$(openssl rand -hex 32)
   setup_token_hash=$(printf '%s' "$setup_token" | openssl dgst -sha256 -r | awk '{print $1}')
   setup_token_expires_at=$(( $(date +%s) + setup_token_ttl_seconds ))
-  temporary_file=$(mktemp "$script_directory/.env.setup-token.XXXXXX")
+  temporary_file=$(mktemp "$target_directory/.env.setup-token.XXXXXX")
   trap 'rm -f -- "${temporary_file:-}"' EXIT
 
   grep -Ev '^AUTH_SETUP_TOKEN_(HASH|EXPIRES_AT)=' "$environment_file" >"$temporary_file"

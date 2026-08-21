@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Generates the secrets for a PeerBlade control plane and writes .env.
-# Run once, next to compose.yml: sudo ./bootstrap.sh panel.example.com
 
 set -euo pipefail
 
@@ -9,7 +7,7 @@ environment_file="$script_directory/.env"
 setup_url_file="$script_directory/setup-url.txt"
 
 fail() {
-  echo "peerblade bootstrap: $*" >&2
+  echo "peerblade production bootstrap: $*" >&2
   exit 1
 }
 
@@ -18,7 +16,7 @@ require_command() {
 }
 
 main() {
-  [[ $# -eq 1 ]] || fail "usage: sudo ./bootstrap.sh DOMAIN"
+  [[ $# -eq 1 ]] || fail "usage: sudo ./deploy/production/bootstrap.sh DOMAIN"
   [[ ${EUID:-$(id -u)} -eq 0 ]] || fail "run this command as root"
 
   local domain=$1
@@ -27,8 +25,6 @@ main() {
   [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] || \
     fail "DOMAIN has an invalid format"
   [[ "$domain" == *.* ]] || fail "DOMAIN must be a fully-qualified DNS name"
-
-  # Never overwrite existing secrets: re-running must not lock you out.
   [[ ! -e "$environment_file" ]] || fail "$environment_file already exists"
   [[ ! -e "$setup_url_file" ]] || fail "$setup_url_file already exists"
 
@@ -44,10 +40,12 @@ main() {
 
   {
     printf 'PEERBLADE_DOMAIN=%s\n' "$domain"
-    printf 'PEERBLADE_IMAGE_TAG=latest\n'
-    printf 'PEERBLADE_AUTH_PROXY_MODE=app\n'
+    printf 'PEERBLADE_MARKETING_DOMAIN=peerblade.com\n'
+    printf 'PEERBLADE_DEV_DOMAIN=dev.peerblade.com\n'
     printf 'PEERBLADE_API_HOSTNAME=peerblade-api\n'
     printf 'PEERBLADE_WEB_HOSTNAME=peerblade-web\n'
+    printf 'PEERBLADE_AUTH_PROXY_MODE=app\n'
+    printf 'PEERBLADE_IMAGE_TAG=latest\n'
     printf '\n'
     printf 'POSTGRES_DB=peerblade\n'
     printf 'POSTGRES_USER=peerblade\n'
@@ -61,11 +59,9 @@ main() {
   chmod 0600 "$environment_file"
   "$script_directory/setup-token.sh" "$domain"
 
-  echo "Secrets created."
-  echo "Environment:      $environment_file"
+  echo "Production secrets created"
+  echo "Environment: $environment_file"
   echo "One-time setup URL: $setup_url_file"
-  echo
-  echo "Next: docker compose pull && docker compose up -d"
 }
 
 main "$@"

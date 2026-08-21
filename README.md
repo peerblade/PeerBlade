@@ -1,11 +1,13 @@
 # PeerBlade
 
-**PeerBlade is a proprietary self-hosted control plane for WireGuard.** One
-panel for your nodes, peers and configurations — running in your own
-infrastructure.
+**PeerBlade is a self-hosted control plane for WireGuard.** One panel for your
+nodes, peers and configurations — running in your own infrastructure.
 
 This repository contains the product documentation and everything needed to
-deploy it. The source code is not open source and is not published here.
+deploy it. The Linux node agent is open source under GPL-3.0-or-later; the web
+panel and control-plane API remain proprietary.
+
+See [LICENSING.md](LICENSING.md) for the exact component boundaries.
 
 🌐 [peerblade.com](https://peerblade.com) · ❓ [FAQ](https://peerblade.com/faq)
 · ✉️ [feedback@peerblade.com](mailto:feedback@peerblade.com)
@@ -38,7 +40,8 @@ PeerBlade is the missing management layer:
 - 🚫 **Not a VPN provider.** Your traffic never passes through PeerBlade
   infrastructure. The servers are yours.
 - 🚫 **Not an SSH-based tool.** PeerBlade never opens a session to your VPS.
-- 🚫 **Not open source.** More on that [below](#repository-and-licensing).
+- 🔎 **Open-source agent.** The privileged code running on WireGuard nodes is
+  published in [`agent/`](agent/); the control plane remains proprietary.
 
 ## How it works
 
@@ -61,6 +64,11 @@ system user with a single Linux capability (`CAP_NET_ADMIN`) and dials **out** t
 the control plane over HTTPS. Nothing connects inward, so no port has to be
 opened for management and no SSH credentials are shared.
 
+Its complete source, installer scripts, protocol description, security model
+and public release workflow are available in [`agent/`](agent/).
+Agent releases use independent `agent-vX.Y.Z` tags; the control-plane images
+continue to use product tags in the form `vX.Y.Z`.
+
 The agent reports snapshots of the interfaces it can see and applies the changes
 you request. Peer private keys are generated on the node and stay there — the
 control plane only ever stores public keys, and a private key reaches you once,
@@ -79,7 +87,8 @@ Everything runs from this repository: it holds the Compose file, the
 reverse-proxy configuration, a bootstrap script for the control plane and an
 interface setup script for the nodes. There is no source tree to clone and
 nothing to compile — the services are published as container images on
-GHCR, and the node agent is attached to each GitHub release.
+GHCR. Product releases include a compatible node-agent binary, while the same
+agent source is built publicly under its independent `agent-vX.Y.Z` tag.
 
 ### What you need
 
@@ -455,7 +464,7 @@ choose to update — this sets the pin and applies it in one go:
 
 ```bash
 cd /opt/peerblade
-sed -i 's/^PEERBLADE_IMAGE_TAG=.*/PEERBLADE_IMAGE_TAG=0.5.1/' .env
+sed -i 's/^PEERBLADE_IMAGE_TAG=.*/PEERBLADE_IMAGE_TAG=0.6.0/' .env
 docker compose pull && docker compose up -d
 ```
 
@@ -628,36 +637,46 @@ Small packets pass and large ones vanish: that is the path MTU. Add
 
 ## Repository and licensing
 
-**PeerBlade is not open source at this stage.** The source code is proprietary
-and is not distributed under any open-source license.
+PeerBlade uses a split-source model:
 
-This repository holds what you need to run the service — the Compose file, the
-reverse-proxy configuration, the bootstrap script and the documentation. The
-application itself ships as container images on GHCR; its source code is not
-published here or anywhere else.
+- the code and node-side deployment scripts in [`agent/`](agent/) are open
+  source under **GPL-3.0-or-later**;
+- the web panel and control-plane API are proprietary and ship as container
+  images on GHCR;
+- the deployment bundle and documentation in the repository root are provided
+  for installing and operating PeerBlade and do not change the control-plane
+  licensing.
+
+The open-source boundary is intentional: the component with `CAP_NET_ADMIN`
+that creates keys and changes WireGuard state can be inspected, built and
+modified independently. PeerBlade publishes and distributes the panel and
+agent as separate programs communicating over the documented HTTP protocol;
+their intended license scopes are described in [LICENSING.md](LICENSING.md).
 
 **You may** deploy PeerBlade in your own infrastructure for your own or your
 organisation's use, run as many nodes and peers as you like, adapt the
 configuration in this repository to your environment, and write about PeerBlade
 in reviews, articles and comparisons.
 
-**You may not**, without the rights holder's consent, extract the source from
-the images or reverse-engineer them, redistribute the images under another
-name, or offer a service based on PeerBlade to third parties.
+The GPL rights granted for the agent are not restricted by the PeerBlade Terms.
+The separate proprietary terms still apply to the control-plane images,
+interface and other materials unless a file explicitly states another license.
 
-Self-hosted and open source are different things: you run PeerBlade in your own
-infrastructure, while the rights to the code stay with the rights holder. The
-authoritative wording is in the [Terms](https://peerblade.com/terms).
+The authoritative wording for the proprietary control plane is in the
+[Terms](https://peerblade.com/terms); the authoritative terms for the agent are
+in [`agent/LICENSE`](agent/LICENSE).
 
 ## Status
 
 Under active development. The feature set may change, and interfaces may move
 before a stable release.
 
-Questions, bug reports and feedback: **[feedback@peerblade.com](mailto:feedback@peerblade.com)**
+Questions, bug reports and feedback:
+**[feedback@peerblade.com](mailto:feedback@peerblade.com)**. Security reports:
+**[security@peerblade.com](mailto:security@peerblade.com)**.
 
 ---
 
-<sub>© 2026 PeerBlade. All rights reserved. ·
+<sub>© 2026 PeerBlade · Node agent GPLv3 ·
 [Privacy](https://peerblade.com/privacy) ·
 [Terms](https://peerblade.com/terms)</sub>

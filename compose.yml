@@ -1,9 +1,3 @@
-# PeerBlade — production stack.
-# Images are pulled from GHCR; nothing is built locally.
-# Pin a release with PEERBLADE_IMAGE_TAG, for example PEERBLADE_IMAGE_TAG=0.2.0
-
-name: peerblade
-
 x-service: &service
   init: true
   security_opt:
@@ -35,7 +29,15 @@ services:
 
   migrate:
     <<: *service
-    image: ghcr.io/peerblade/peerblade-api:${PEERBLADE_IMAGE_TAG:-latest}
+    image: peerblade-api:${PEERBLADE_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: deploy/production/Dockerfile
+      target: api-runtime
+      args:
+        NEXT_PUBLIC_SITE_URL: https://${PEERBLADE_MARKETING_DOMAIN:-peerblade.com}
+        NEXT_PUBLIC_GA_ID: ${PEERBLADE_GA_ID-}
+        GO_MODULE_PROXY: ${GO_MODULE_PROXY:-https://proxy.golang.org|https://goproxy.io|direct}
     restart: 'no'
     command:
       - /app/node_modules/.bin/prisma
@@ -49,7 +51,7 @@ services:
 
   api:
     <<: *service
-    image: ghcr.io/peerblade/peerblade-api:${PEERBLADE_IMAGE_TAG:-latest}
+    image: peerblade-api:${PEERBLADE_IMAGE_TAG:-latest}
     restart: unless-stopped
     command: ['node', 'dist/main.js']
     environment:
@@ -63,6 +65,9 @@ services:
       AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-168}
       AUTH_SETUP_TOKEN_HASH: ${AUTH_SETUP_TOKEN_HASH-}
       AUTH_SETUP_TOKEN_EXPIRES_AT: ${AUTH_SETUP_TOKEN_EXPIRES_AT-}
+      INSTALLATION_NOTIFICATION_RESEND_API_KEY: ${INSTALLATION_NOTIFICATION_RESEND_API_KEY-}
+      INSTALLATION_NOTIFICATION_FROM: ${INSTALLATION_NOTIFICATION_FROM:-PeerBlade Installations <installations@peerblade.com>}
+      INSTALLATION_NOTIFICATION_TO: ${INSTALLATION_NOTIFICATION_TO:-contact@peerblade.com}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -86,11 +91,21 @@ services:
 
   web:
     <<: *service
-    image: ghcr.io/peerblade/peerblade-web:${PEERBLADE_IMAGE_TAG:-latest}
+    image: peerblade-web:${PEERBLADE_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: deploy/production/Dockerfile
+      target: web-runtime
+      args:
+        NEXT_PUBLIC_SITE_URL: https://${PEERBLADE_MARKETING_DOMAIN:-peerblade.com}
+        NEXT_PUBLIC_GA_ID: ${PEERBLADE_GA_ID-}
+        GO_MODULE_PROXY: ${GO_MODULE_PROXY:-https://proxy.golang.org|https://goproxy.io|direct}
     restart: unless-stopped
     command: ['node', 'apps/web/server.js']
     environment:
       NODE_ENV: production
+      # Where the landing sends a visitor who already has a panel here.
+      PEERBLADE_PANEL_URL: https://${PEERBLADE_DOMAIN:?set PEERBLADE_DOMAIN}
     depends_on:
       api:
         condition: service_healthy
@@ -117,10 +132,12 @@ services:
     restart: unless-stopped
     environment:
       PEERBLADE_DOMAIN: ${PEERBLADE_DOMAIN:?set PEERBLADE_DOMAIN}
+      PEERBLADE_MARKETING_DOMAIN: ${PEERBLADE_MARKETING_DOMAIN:-peerblade.com}
+      PEERBLADE_DEV_DOMAIN: ${PEERBLADE_DEV_DOMAIN:-dev.peerblade.com}
       PEERBLADE_ADMIN_USER: ${PEERBLADE_ADMIN_USER:-admin}
       PEERBLADE_ADMIN_PASSWORD_HASH: ${PEERBLADE_ADMIN_PASSWORD_HASH:-}
-      PEERBLADE_API_HOSTNAME: ${PEERBLADE_API_HOSTNAME:-peerblade-api}
-      PEERBLADE_WEB_HOSTNAME: ${PEERBLADE_WEB_HOSTNAME:-peerblade-web}
+      PEERBLADE_DEV_ADMIN_USER: ${PEERBLADE_DEV_ADMIN_USER:-admin}
+      PEERBLADE_DEV_ADMIN_PASSWORD_HASH: ${PEERBLADE_DEV_ADMIN_PASSWORD_HASH:-${PEERBLADE_ADMIN_PASSWORD_HASH:-}}
     ports:
       - '80:80'
       - '443:443'
