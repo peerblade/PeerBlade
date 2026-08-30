@@ -1,5 +1,5 @@
 [Unit]
-Description=PeerBlade native WireGuard agent
+Description=PeerBlade native network transport agent
 Documentation=https://peerblade.com
 Wants=network-online.target
 After=network-online.target

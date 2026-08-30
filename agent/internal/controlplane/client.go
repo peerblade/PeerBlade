@@ -99,6 +99,10 @@ func (c *Client) Snapshot(ctx context.Context, snapshot wireguard.Snapshot) (Age
 	return c.post(ctx, "/api/agent/v1/snapshot", snapshot)
 }
 
+func (c *Client) Traffic(ctx context.Context, report TrafficReport) error {
+	return c.request(ctx, http.MethodPost, "/api/agent/v1/traffic", report, nil)
+}
+
 func (c *Client) NextCommand(ctx context.Context) (*AgentCommand, error) {
 	var response struct {
 		Command *AgentCommand `json:"command"`

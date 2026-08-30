@@ -13,7 +13,7 @@ require_command() {
 
 validate_inputs() {
   [[ $# -eq 4 ]] || \
-    fail "usage: sudo ./agent/deploy/setup-wireguard.sh INTERFACE ADDRESS_CIDR LISTEN_PORT OUTBOUND_INTERFACE"
+    fail "usage: sudo ./deploy/agent/setup-wireguard.sh INTERFACE ADDRESS_CIDR LISTEN_PORT OUTBOUND_INTERFACE"
 
   local interface_name=$1
   local address_cidr=$2

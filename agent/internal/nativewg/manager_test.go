@@ -121,6 +121,34 @@ func TestManagerAllocatesSequentialAddresses(t *testing.T) {
 	}
 }
 
+func TestManagerRendersAmneziaWGConfiguration(t *testing.T) {
+	manager, client, store := newTestManager(t)
+	manager, err := NewManager(client, store, Config{
+		InterfaceName: "peerblade0", Transport: "amneziawg",
+		Endpoint: "node.example.com:51821", AddressCIDR: "10.45.0.1/24",
+		ClientAllowedIPs: []string{"0.0.0.0/0"},
+		Amnezia: AmneziaParameters{
+			Jc: 5, Jmin: 20, Jmax: 80, S1: 30, S2: 40,
+			H1: 100001, H2: 100002, H3: 100003, H4: 100004,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := manager.CreatePeer("AWG phone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"Jc = 5", "Jmin = 20", "Jmax = 80", "S1 = 30", "S2 = 40",
+		"H1 = 100001", "H2 = 100002", "H3 = 100003", "H4 = 100004",
+	} {
+		if !strings.Contains(created.Configuration, expected) {
+			t.Fatalf("AWG configuration does not contain %q:\n%s", expected, created.Configuration)
+		}
+	}
+}
+
 func TestNewManagerRejectsNon24Network(t *testing.T) {
 	_, client, store := newTestManager(t)
 	_, err := NewManager(client, store, Config{

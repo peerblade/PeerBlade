@@ -20,11 +20,25 @@ type deviceClient interface {
 
 type Config struct {
 	InterfaceName    string
+	Transport        string
 	Endpoint         string
 	AddressCIDR      string
 	DNS              []string
 	ClientAllowedIPs []string
 	KeepaliveSeconds int
+	Amnezia          AmneziaParameters
+}
+
+type AmneziaParameters struct {
+	Jc   int
+	Jmin int
+	Jmax int
+	S1   int
+	S2   int
+	H1   int64
+	H2   int64
+	H3   int64
+	H4   int64
 }
 
 type CreatedPeer struct {
@@ -48,6 +62,18 @@ func NewManager(client deviceClient, store *Store, config Config) (*Manager, err
 		return nil, errors.New("WireGuard client and state store are required")
 	}
 	config.InterfaceName = strings.TrimSpace(config.InterfaceName)
+	config.Transport = strings.TrimSpace(config.Transport)
+	if config.Transport == "" {
+		config.Transport = "wireguard"
+	}
+	if config.Transport != "wireguard" && config.Transport != "amneziawg" {
+		return nil, errors.New("managed transport must be wireguard or amneziawg")
+	}
+	if config.Transport == "amneziawg" {
+		if err := validateAmneziaParameters(config.Amnezia); err != nil {
+			return nil, err
+		}
+	}
 	config.Endpoint = strings.TrimSpace(config.Endpoint)
 	if config.InterfaceName == "" || config.Endpoint == "" {
 		return nil, errors.New("managed interface and endpoint are required")
@@ -329,6 +355,19 @@ func (m *Manager) renderConfiguration(peer Peer, serverPublicKey string) string 
 		"PrivateKey = " + peer.PrivateKey,
 		"Address = " + peer.Address + "/32",
 	}
+	if m.config.Transport == "amneziawg" {
+		interfaceLines = append(interfaceLines,
+			fmt.Sprintf("Jc = %d", m.config.Amnezia.Jc),
+			fmt.Sprintf("Jmin = %d", m.config.Amnezia.Jmin),
+			fmt.Sprintf("Jmax = %d", m.config.Amnezia.Jmax),
+			fmt.Sprintf("S1 = %d", m.config.Amnezia.S1),
+			fmt.Sprintf("S2 = %d", m.config.Amnezia.S2),
+			fmt.Sprintf("H1 = %d", m.config.Amnezia.H1),
+			fmt.Sprintf("H2 = %d", m.config.Amnezia.H2),
+			fmt.Sprintf("H3 = %d", m.config.Amnezia.H3),
+			fmt.Sprintf("H4 = %d", m.config.Amnezia.H4),
+		)
+	}
 	if len(m.config.DNS) > 0 {
 		interfaceLines = append(interfaceLines, "DNS = "+strings.Join(m.config.DNS, ", "))
 	}
@@ -342,6 +381,30 @@ func (m *Manager) renderConfiguration(peer Peer, serverPublicKey string) string 
 	}
 
 	return strings.Join(append(interfaceLines, append([]string{""}, peerLines...)...), "\n") + "\n"
+}
+
+func validateAmneziaParameters(parameters AmneziaParameters) error {
+	if parameters.Jc < 1 || parameters.Jc > 128 {
+		return errors.New("AmneziaWG Jc must be between 1 and 128")
+	}
+	if parameters.Jmin < 1 || parameters.Jmax > 1280 || parameters.Jmin > parameters.Jmax {
+		return errors.New("AmneziaWG junk packet range is invalid")
+	}
+	if parameters.S1 < 0 || parameters.S1 > 1132 || parameters.S2 < 0 || parameters.S2 > 1188 {
+		return errors.New("AmneziaWG S1/S2 values are invalid")
+	}
+	if parameters.S1+56 == parameters.S2 {
+		return errors.New("AmneziaWG S1 + 56 must not equal S2")
+	}
+	headers := []int64{parameters.H1, parameters.H2, parameters.H3, parameters.H4}
+	seen := map[int64]bool{}
+	for _, header := range headers {
+		if header < 5 || header > 2147483647 || seen[header] {
+			return errors.New("AmneziaWG H1-H4 must be unique values between 5 and 2147483647")
+		}
+		seen[header] = true
+	}
+	return nil
 }
 
 func (m *Manager) nextAddress(state State) (string, error) {

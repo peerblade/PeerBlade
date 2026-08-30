@@ -4,7 +4,7 @@ set -euo pipefail
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 agent_directory=$(cd -- "$script_directory/.." && pwd)
-version=${PEERBLADE_AGENT_VERSION:-0.6.1}
+version=${PEERBLADE_AGENT_VERSION:-0.7.1}
 output_directory="$agent_directory/dist"
 output_file="$output_directory/peerblade-agent-linux-amd64"
 

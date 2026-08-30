@@ -1,8 +1,8 @@
 # PeerBlade Agent
 
 The PeerBlade Agent is the open-source node component of PeerBlade. It runs on
-a Linux WireGuard node, connects outbound to a PeerBlade control plane and
-applies peer operations through the kernel WireGuard API.
+a Linux WireGuard or AmneziaWG node, connects outbound to a PeerBlade control
+plane and applies peer operations through a transport-specific driver.
 
 The agent is licensed under the
 [GNU General Public License v3.0 or later](LICENSE). The PeerBlade web panel and
@@ -12,14 +12,16 @@ license.
 ## What the agent does
 
 - registers a node and sends periodic heartbeats over HTTPS;
-- reads WireGuard interfaces through `wgctrl` and uploads safe snapshots;
+- reads WireGuard through `wgctrl` and AmneziaWG through the official `awg`
+  control interface, then uploads the same safe snapshot model;
+- sends lightweight counter reports for current RX/TX speed;
 - creates, enables, disables and removes peers on the dedicated managed
   interface;
 - generates peer private and preshared keys locally;
 - stores managed peer secrets in a `0600` state file on the node;
 - polls the control plane for authenticated peer-management commands.
 
-It does not proxy VPN traffic, open an inbound management port, use SSH, read
+It does not proxy user traffic, open an inbound management port, use SSH, read
 the Docker socket or send private keys in snapshots.
 
 See [PROTOCOL.md](PROTOCOL.md) for the HTTP exchange and [SECURITY.md](SECURITY.md)
@@ -29,7 +31,7 @@ for privileges, local secrets and vulnerability reporting.
 
 - Linux on amd64 or arm64;
 - Go 1.23 or newer to build from source;
-- a kernel WireGuard interface;
+- a WireGuard interface, or the official AmneziaWG tools and interface;
 - `CAP_NET_ADMIN` to inspect and configure WireGuard through netlink;
 - outbound HTTPS access to a compatible PeerBlade control plane.
 
@@ -41,7 +43,7 @@ go test ./...
 go vet ./...
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
   -trimpath \
-  -ldflags "-s -w -X main.agentVersion=0.6.1" \
+  -ldflags "-s -w -X main.agentVersion=0.7.1" \
   -o dist/peerblade-agent-linux-amd64 .
 ```
 
@@ -59,9 +61,10 @@ The recommended installation command is issued by the server page of your own
 PeerBlade control plane. It contains a short-lived enrollment token and selects
 the correct release binary for the node architecture.
 
-The scripts used by that command are published in [`deploy/`](deploy/) so they
-can be reviewed before being run as root. Never paste an enrollment command or
-the resulting `/etc/peerblade/agent.env` into a public issue.
+The scripts used by that command are published in the
+[public agent directory](https://github.com/peerblade/PeerBlade/tree/main/agent/deploy)
+so they can be reviewed before being run as root. Never paste an enrollment
+command or the resulting `/etc/peerblade/agent.env` into a public issue.
 
 ## Compatibility
 

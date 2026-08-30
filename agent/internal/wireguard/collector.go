@@ -29,6 +29,7 @@ type Snapshot struct {
 
 type DeviceSnapshot struct {
 	Name         string         `json:"name"`
+	Transport    string         `json:"transport"`
 	Type         string         `json:"type"`
 	PublicKey    string         `json:"publicKey"`
 	ListenPort   int            `json:"listenPort"`
@@ -75,7 +76,7 @@ func (c *Collector) Collect() (Snapshot, error) {
 			continue
 		}
 
-		snapshot.Devices = append(snapshot.Devices, mapDevice(device))
+		snapshot.Devices = append(snapshot.Devices, MapDevice(device, "wireguard"))
 	}
 
 	sort.Slice(snapshot.Devices, func(i, j int) bool {
@@ -85,7 +86,7 @@ func (c *Collector) Collect() (Snapshot, error) {
 	return snapshot, nil
 }
 
-func mapDevice(device *wgtypes.Device) DeviceSnapshot {
+func MapDevice(device *wgtypes.Device, transport string) DeviceSnapshot {
 	peers := make([]PeerSnapshot, 0, len(device.Peers))
 
 	for _, peer := range device.Peers {
@@ -98,6 +99,7 @@ func mapDevice(device *wgtypes.Device) DeviceSnapshot {
 
 	return DeviceSnapshot{
 		Name:         device.Name,
+		Transport:    transport,
 		Type:         device.Type.String(),
 		PublicKey:    device.PublicKey.String(),
 		ListenPort:   device.ListenPort,

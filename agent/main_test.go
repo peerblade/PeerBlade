@@ -137,6 +137,7 @@ func TestLoadAgentConfig(t *testing.T) {
 	t.Setenv("PEERBLADE_HEARTBEAT_INTERVAL", "15s")
 	t.Setenv("PEERBLADE_SNAPSHOT_INTERVAL", "45s")
 	t.Setenv("PEERBLADE_COMMAND_INTERVAL", "3s")
+	t.Setenv("PEERBLADE_TRAFFIC_INTERVAL", "10s")
 
 	config, err := loadAgentConfig()
 	if err != nil {
@@ -153,6 +154,9 @@ func TestLoadAgentConfig(t *testing.T) {
 	}
 	if config.commandInterval != 3*time.Second {
 		t.Fatalf("commandInterval = %v", config.commandInterval)
+	}
+	if config.trafficInterval != 10*time.Second {
+		t.Fatalf("trafficInterval = %v", config.trafficInterval)
 	}
 }
 
@@ -232,5 +236,30 @@ func TestLoadAgentConfigRequiresCompleteNativeManagement(t *testing.T) {
 
 	if _, err := loadAgentConfig(); err == nil {
 		t.Fatal("loadAgentConfig() accepted incomplete native management config")
+	}
+}
+
+func TestLoadAgentConfigLoadsAmneziaWGParameters(t *testing.T) {
+	t.Setenv("PEERBLADE_API_URL", "http://localhost:4000")
+	t.Setenv("PEERBLADE_SERVER_ID", "server-id")
+	t.Setenv("PEERBLADE_AGENT_TOKEN", "pbl_token")
+	t.Setenv("PEERBLADE_MANAGED_INTERFACE", "peerblade-awg0")
+	t.Setenv("PEERBLADE_MANAGED_TRANSPORT", "amneziawg")
+	t.Setenv("PEERBLADE_MANAGED_ENDPOINT", "node.example.com:51821")
+	t.Setenv("PEERBLADE_MANAGED_ADDRESS_CIDR", "10.45.0.1/24")
+	t.Setenv("PEERBLADE_STATE_DIRECTORY", "/var/lib/peerblade-agent")
+	for name, value := range map[string]string{
+		"JC": "5", "JMIN": "20", "JMAX": "80", "S1": "30", "S2": "40",
+		"H1": "100001", "H2": "100002", "H3": "100003", "H4": "100004",
+	} {
+		t.Setenv("PEERBLADE_AWG_"+name, value)
+	}
+
+	config, err := loadAgentConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.managedTransport != "amneziawg" || config.amneziaParameters.Jmax != 80 {
+		t.Fatalf("unexpected AmneziaWG config: %+v", config)
 	}
 }

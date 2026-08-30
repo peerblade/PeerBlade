@@ -15,9 +15,9 @@ unit_source="$script_directory/peerblade-agent.service"
 usage() {
   cat <<'EOF'
 Usage:
-  ./agent/deploy/install.sh check BINARY_PATH ENV_FILE
-  sudo ./agent/deploy/install.sh install BINARY_PATH ENV_FILE
-  sudo ./agent/deploy/install.sh uninstall
+  ./deploy/agent/install.sh check BINARY_PATH ENV_FILE
+  sudo ./deploy/agent/install.sh install BINARY_PATH ENV_FILE
+  sudo ./deploy/agent/install.sh uninstall
 
 The uninstall action preserves /etc/peerblade/agent.env and the peerblade user.
 EOF
@@ -42,6 +42,7 @@ validate_environment_file() {
   local server_id
   local token
   local managed_interface
+  local managed_transport
   local variable
 
   [[ -f "$environment_file" ]] || fail "environment file does not exist: $environment_file"
@@ -70,6 +71,15 @@ validate_environment_file() {
     done
     [[ "$managed_interface" =~ ^[A-Za-z0-9_.-]{1,15}$ ]] || \
       fail "PEERBLADE_MANAGED_INTERFACE has an invalid Linux interface name"
+    managed_transport=$(sed -n 's/^PEERBLADE_MANAGED_TRANSPORT=//p' "$environment_file")
+    [[ -z "$managed_transport" || "$managed_transport" == wireguard || "$managed_transport" == amneziawg ]] || \
+      fail "PEERBLADE_MANAGED_TRANSPORT must be wireguard or amneziawg"
+    if [[ "$managed_transport" == amneziawg ]]; then
+      for variable in PEERBLADE_AWG_JC PEERBLADE_AWG_JMIN PEERBLADE_AWG_JMAX PEERBLADE_AWG_S1 PEERBLADE_AWG_S2 PEERBLADE_AWG_H1 PEERBLADE_AWG_H2 PEERBLADE_AWG_H3 PEERBLADE_AWG_H4; do
+        [[ $(grep -Ec "^${variable}=[0-9]+$" "$environment_file") -eq 1 ]] || \
+          fail "$environment_file must contain one numeric $variable for AmneziaWG"
+      done
+    fi
   fi
 
   if [[ "$api_url" == http://* ]]; then

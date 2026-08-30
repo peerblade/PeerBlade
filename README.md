@@ -1,7 +1,8 @@
 # PeerBlade
 
-**PeerBlade is a self-hosted control plane for WireGuard.** One panel for your
-nodes, peers and configurations — running in your own infrastructure.
+**PeerBlade is a self-hosted control plane for WireGuard and AmneziaWG.** One
+panel for your nodes, peers and configurations — running in your own
+infrastructure.
 
 This repository contains the product documentation and everything needed to
 deploy it. The Linux node agent is open source under GPL-3.0-or-later; the web
@@ -19,14 +20,14 @@ upgrade requirements for every release.
 
 ## What it is
 
-WireGuard itself is simple. Managing it stops being simple the moment you have
-a second server: configuration files edited by hand, peers tracked in a note,
-no single place that tells you what is actually connected.
+Native WireGuard operations are simple. Managing them stops being simple the
+moment you have a second server: configuration files edited by hand, peers
+tracked in a note, no single place that tells you what is actually connected.
 
 PeerBlade is the missing management layer:
 
-- 🗂 **Node registry** — every VPS with agent status, interfaces and the live
-  WireGuard state
+- 🗂 **Node registry** — every VPS with agent status, selected transport,
+  interfaces and live state
 - 👥 **Peer lifecycle** — create, disable, re-enable and delete access without
   touching `wg.conf`
 - 📄 **Configurations** — hand out a `.conf` file or a QR code straight from the
@@ -35,13 +36,14 @@ PeerBlade is the missing management layer:
 - 🧾 **Audit trail** — sign-ins and administrative operations, never passwords,
   tokens or private keys
 
-## What it is not
+## Boundaries
 
-- 🚫 **Not a VPN provider.** Your traffic never passes through PeerBlade
-  infrastructure. The servers are yours.
+- ↔️ **Not part of the data path.** User traffic stays between your peers and
+  your own nodes.
 - 🚫 **Not an SSH-based tool.** PeerBlade never opens a session to your VPS.
-- 🔎 **Open-source agent.** The privileged code running on WireGuard nodes is
-  published in [`agent/`](agent/); the control plane remains proprietary.
+- 🔎 **Open-source agent.** The privileged code running on WireGuard and
+  AmneziaWG nodes is published in [`agent/`](agent/); the control plane remains
+  proprietary.
 
 ## How it works
 
@@ -50,8 +52,11 @@ flowchart LR
     Admin["👤 Administrator<br/>browser"] -->|HTTPS| CP["🧠 Control plane<br/>panel + API"]
     CP --> DB[("🗄 PostgreSQL")]
     Agent["🤖 Agent on your VPS"] -->|outbound HTTPS| CP
-    Agent -->|netlink| WG["🔐 WireGuard interface"]
+    Agent --> Driver{"WG / AWG driver"}
+    Driver --> WG["🔐 WireGuard interface"]
+    Driver --> AWG["🛡 AmneziaWG interface"]
     Peer["📱 Peer device"] -->|UDP| WG
+    Peer -->|UDP| AWG
 ```
 
 Two moving parts:
@@ -59,10 +64,10 @@ Two moving parts:
 **The control plane** — the panel, the API and PostgreSQL. You deploy it on a
 Linux host behind a reverse proxy with TLS.
 
-**The agent** — a small native binary on each WireGuard node. It runs as its own
-system user with a single Linux capability (`CAP_NET_ADMIN`) and dials **out** to
-the control plane over HTTPS. Nothing connects inward, so no port has to be
-opened for management and no SSH credentials are shared.
+**The agent** — a small native binary on each WireGuard or AmneziaWG node. It
+runs as its own system user with a single Linux capability (`CAP_NET_ADMIN`) and
+dials **out** to the control plane over HTTPS. Nothing connects inward, so no
+port has to be opened for management and no SSH credentials are shared.
 
 Its complete source, installer scripts, protocol description, security model
 and public release workflow are available in [`agent/`](agent/).
@@ -74,8 +79,8 @@ you request. Peer private keys are generated on the node and stay there — the
 control plane only ever stores public keys, and a private key reaches you once,
 at the moment a configuration is issued.
 
-Shut the panel down and the tunnels keep running: WireGuard on your servers is
-untouched, and you can still manage it with `wg` and `wg-quick`.
+Shut the panel down and the tunnels keep running: the interfaces on your
+servers are untouched, and you can still manage them with their native tools.
 
 ## Deployment
 
@@ -99,12 +104,12 @@ SSH, and a freshly provisioned machine is the expected starting point.
   access, 2 GB RAM, ports 80 and 443 free. `x86_64` and `arm64` both work, so
   the cheaper Ampere or Graviton instances are fine.
 - 🌐 **A DNS name pointing at it** — an `A` (and optionally `AAAA`) record. It
-  must resolve *before* the first start: Caddy requests a Let's Encrypt
+  must resolve _before_ the first start: Caddy requests a Let's Encrypt
   certificate on boot.
-- 🐧 **One or more WireGuard nodes** — `x86_64` or `arm64` Linux with systemd
-  and outbound HTTPS to the panel; the installer picks the matching agent build
-  and installs `wireguard-tools` where it is missing. The control plane host
-  itself can be the first node — see `--with-node` in step 1.
+- 🐧 **One or more WireGuard or AmneziaWG nodes** — `x86_64` or `arm64` Linux
+  with systemd and outbound HTTPS to the panel; the installer picks the matching
+  agent build and prepares the transport selected in the panel. The control
+  plane host itself can be the first WireGuard node — see `--with-node` in step 1.
 - 🔓 **An open UDP port on each node** for your peers — 51820 by default. The
   installer opens it in ufw; a firewall outside the machine, such as a cloud
   security group, is yours to open
@@ -124,7 +129,7 @@ from the outside, which a machine behind NAT cannot answer. Docker Desktop does
 not fit either — it shares only a few host paths, and the Compose file mounts
 its proxy configuration from the deployment directory.
 
-The control plane and a WireGuard node may live on the same machine, but keeping
+The control plane and a network node may live on the same machine, but keeping
 them apart is the better default.
 
 </details>
@@ -156,10 +161,10 @@ curl -fsSL https://peerblade.com/install.sh | sudo bash -s -- panel.example.com
 ```
 
 **One machine for everything?** Add `--with-node` and the same host also becomes
-your first VPN node: the installer registers it, prepares a WireGuard interface
+your first network node: the installer registers it, prepares a WireGuard interface
 on UDP 51820 and connects the agent, so the panel opens with a server already
-online and steps 2 and 3 collapse into this one. `--vpn-port` moves the tunnel
-elsewhere if 51820 is taken.
+online and steps 2 and 3 collapse into this one. `--transport-port` moves the
+transport port when 51820 is taken.
 
 ```bash
 curl -fsSL https://peerblade.com/install.sh | sudo bash -s -- panel.example.com --with-node
@@ -273,9 +278,9 @@ accounts are local to your installation.
 
 </details>
 
-### 3. WireGuard node
+### 3. WireGuard or AmneziaWG node
 
-This step runs on the WireGuard node, not on the control plane host. In the
+This step runs on the network node, not on the control plane host. In the
 panel: **Servers → Connect a server**. It returns a one-time command with the
 token and the endpoint already filled in — copy it from the panel and run it
 there. It looks like this:
@@ -287,16 +292,25 @@ curl -fsSL 'https://panel.example.com/install-agent.sh' | \
   --interface 'peerblade0' --subnet '10.44.0.1/24'
 ```
 
-That single command connects the agent *and* prepares the interface PeerBlade
+That single command connects the agent _and_ prepares the interface PeerBlade
 will manage: it installs `wireguard-tools`, creates `peerblade0` on UDP 51820
 with a fresh key, enables IPv4 forwarding and NAT, opens the port and the
 forwarding rules in ufw when ufw is active, and points the agent at the result.
+
+Select **AmneziaWG** in the server form to receive a transport-aware command
+with `--transport amneziawg`. Its isolated defaults are `peerblade-awg0`, UDP
+51821 and `10.45.0.1/24`. The installer uses the official Amnezia packages,
+loads the kernel module and generates the AWG parameters locally before it
+spends the enrollment token. WireGuard interfaces on the same host are left
+unchanged, so WG and AWG nodes can be managed from the same panel.
 
 Verify it came up:
 
 ```bash
 systemctl status peerblade-agent --no-pager
 wg show peerblade0
+# For an AmneziaWG node:
+awg show peerblade-awg0
 ```
 
 The server appears **online** in the panel within a snapshot interval, and you
@@ -319,8 +333,8 @@ that holds configurations for several nodes never sees the same address twice.
 resolver reachable through it, a client keeps its local one, which disappears
 the moment the tunnel comes up — a connected tunnel with no working internet.
 
-`--no-interface` installs the agent alone, for a node whose WireGuard you would
-rather set up by hand.
+`--no-interface` installs the agent alone when you would rather prepare the
+selected transport by hand.
 
 </details>
 
@@ -338,8 +352,8 @@ ready costs you nothing but a re-run.
 
 It touches exactly one interface: the one named in `--interface`, and only when
 that interface does not exist yet. An interface already present is kept as it
-is and simply handed to the agent. Everything else on the node, `wg0` above
-all, is read for the snapshot and never modified.
+is and simply handed to the agent. Other supported interfaces are included in
+read-only snapshots and never modified.
 
 </details>
 
@@ -355,8 +369,8 @@ ufw route allow in on peerblade0 out on ens3
 ufw route allow in on ens3 out on peerblade0
 ```
 
-The first lets peers *reach* the node, the others let their traffic pass
-*through* it. With only the first, the tunnel connects, the handshake succeeds
+The first lets peers _reach_ the node, the others let their traffic pass
+_through_ it. With only the first, the tunnel connects, the handshake succeeds
 and nothing loads — the evidence being a line like this in `dmesg`:
 
 ```
@@ -484,7 +498,7 @@ docker compose exec -T postgres \
 ```
 
 Keep `.env` alongside the dump — without `POSTGRES_PASSWORD` the volume is not
-much use. Peer private keys are *not* in the dump by design; they live on the
+much use. Peer private keys are _not_ in the dump by design; they live on the
 nodes and in the configurations you handed out.
 
 ## Uninstalling PeerBlade
@@ -517,7 +531,7 @@ the panel later with `docker compose up -d`.
 First create the backup shown above. If this host was connected with
 `--with-node`, open its server in PeerBlade and run the full agent-removal
 command **before** stopping the panel. Removing the control plane does not
-remove an agent, a WireGuard interface, peer keys or working tunnels.
+remove an agent, a managed interface, peer keys or working tunnels.
 
 After checking that the backup is readable and that you are in the expected
 directory, remove the stack and its named volumes:
@@ -531,7 +545,7 @@ sudo rm -rf -- /opt/peerblade
 
 This permanently deletes the PeerBlade PostgreSQL database, Caddy state and
 installation secrets. It does not uninstall Docker and does not affect other
-Docker projects or WireGuard configurations on the host. Unused PeerBlade
+Docker projects or interface configurations on the host. Unused PeerBlade
 container images may be removed later with normal Docker image-pruning tools.
 
 ## Troubleshooting
@@ -592,8 +606,7 @@ iptables -t nat -S POSTROUTING | grep -i masquerade
 ```
 
 A `UFW BLOCK` line naming your WireGuard interface means the firewall lets peers
-*reach* the node but not pass *through* it — see the forwarding rules in step
-3. In the masquerade rule, the outbound interface must be the real one:
+_reach_ the node but not pass _through_ it — see the forwarding rules in step 3. In the masquerade rule, the outbound interface must be the real one:
 compare it with `ip route get 1.1.1.1`. A mismatch leaves replies with nowhere
 to return to.
 
@@ -648,7 +661,7 @@ PeerBlade uses a split-source model:
   licensing.
 
 The open-source boundary is intentional: the component with `CAP_NET_ADMIN`
-that creates keys and changes WireGuard state can be inspected, built and
+that creates keys and changes WireGuard or AmneziaWG state can be inspected, built and
 modified independently. PeerBlade publishes and distributes the panel and
 agent as separate programs communicating over the documented HTTP protocol;
 their intended license scopes are described in [LICENSING.md](LICENSING.md).

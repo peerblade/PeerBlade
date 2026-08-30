@@ -19,6 +19,18 @@ type snapshotCollector interface {
 	Collect() (wireguard.Snapshot, error)
 }
 
+type synchronizedCollector struct {
+	inner snapshotCollector
+	mu    sync.Mutex
+}
+
+func (c *synchronizedCollector) Collect() (wireguard.Snapshot, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.inner.Collect()
+}
+
 func RunSnapshots(
 	ctx context.Context,
 	client snapshotClient,
@@ -67,9 +79,11 @@ func RunAgent(
 	version string,
 	heartbeatInterval time.Duration,
 	snapshotInterval time.Duration,
+	trafficInterval time.Duration,
 	commandInterval time.Duration,
 ) error {
 	const retryDelay = 5 * time.Second
+	collector = &synchronizedCollector{inner: collector}
 
 	workers := []struct {
 		name string
@@ -85,6 +99,12 @@ func RunAgent(
 			name: "snapshot",
 			run: func(workerContext context.Context) error {
 				return RunSnapshots(workerContext, client, collector, snapshotInterval)
+			},
+		},
+		{
+			name: "live traffic",
+			run: func(workerContext context.Context) error {
+				return RunTrafficReports(workerContext, client, collector, trafficInterval)
 			},
 		},
 		{

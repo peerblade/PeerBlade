@@ -71,7 +71,7 @@ func TestCollectorCollectsSafeSnapshot(t *testing.T) {
 	}
 
 	device := snapshot.Devices[0]
-	if device.Name != "wg1" || device.ListenPort != 51821 || device.PeerCount != 1 {
+	if device.Name != "wg1" || device.Transport != "wireguard" || device.ListenPort != 51821 || device.PeerCount != 1 {
 		t.Fatalf("unexpected device snapshot: %+v", device)
 	}
 

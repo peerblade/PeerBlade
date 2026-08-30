@@ -13,7 +13,8 @@ report, investigate it and coordinate disclosure before publishing details.
 ## Privilege model
 
 The systemd service runs as the dedicated `peerblade` user. It receives
-`CAP_NET_ADMIN`, which is required by the Linux WireGuard netlink API, and uses
+`CAP_NET_ADMIN`, which is required by the Linux WireGuard netlink API and the
+AmneziaWG control interface, and uses
 a hardened unit with `NoNewPrivileges`, a restricted filesystem, namespaces,
 devices, address families and system-call architecture.
 
@@ -30,7 +31,7 @@ control-plane URL. Production deployments must use HTTPS.
 - Snapshots contain public operational state, not private or preshared keys.
 
 Anyone with root access to the node can still read these files and control the
-WireGuard interface. PeerBlade does not attempt to protect a node from its own
+managed interface. PeerBlade does not attempt to protect a node from its own
 root administrator.
 
 ## Scope

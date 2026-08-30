@@ -1,7 +1,7 @@
 # PeerBlade agent deployment
 
 This directory holds the systemd deployment of the Linux agent. Do not run the
-commands below on a working VPN server without a maintenance window and a
+commands below on a working network node without a maintenance window and a
 verified route to the control plane.
 
 ## One-command install
@@ -23,7 +23,7 @@ puts the server's own name and the default port into the `--endpoint` flag:
 ```bash
 curl -fsSL 'https://my.peerblade.com/install-agent.sh' | sudo bash -s -- \
   --url 'https://my.peerblade.com' --token 'pen_...' \
-  --endpoint 'node.example.com:51820' \
+  --endpoint 'kz.peerblade.com:51820' \
   --interface 'peerblade0' --subnet '10.44.0.1/24'
 ```
 
@@ -33,8 +33,35 @@ forwarding, opens the port and the forwarding rule in ufw when ufw is active,
 and writes the `PEERBLADE_MANAGED_*` variables into `agent.env`. After it
 finishes, the panel can create peers straight away.
 
-The checks that could stop it — a missing package, an occupied UDP port, no
-default route — all run before the one-time token is spent, so a host that is
+For an AmneziaWG node, select **AmneziaWG** before adding the server. PeerBlade
+uses separate defaults (`peerblade-awg0`, UDP `51821` and `10.45.0.1/24`) and
+adds `--transport amneziawg` to the command. The official `amneziawg` package
+is installed automatically from the Amnezia PPA together with `awg`,
+`awg-quick`, the current kernel headers and the DKMS module. The module must
+build and load successfully before PeerBlade exchanges the one-time enrollment
+token. This automated path supports Ubuntu and Debian hosts that use `apt`.
+
+If automatic package setup is unavailable or must be reviewed separately, use
+the upstream Ubuntu installation manually and then run the unchanged PeerBlade
+command again:
+
+```bash
+sudo apt install -y software-properties-common python3-launchpadlib gnupg2 \
+  "linux-headers-$(uname -r)"
+sudo add-apt-repository ppa:amnezia/ppa
+sudo apt update
+sudo apt install -y amneziawg
+```
+
+The PeerBlade command then creates only the selected AWG interface and its
+targeted forwarding/NAT rules. It generates `Jc`, `Jmin`, `Jmax`, `S1`, `S2`
+and unique `H1`-`H4` values locally, writes them to the root-only interface and
+agent configuration, and never sends private keys to the control plane.
+WireGuard interfaces, Docker rules and unrelated firewall entries are not
+cleared or replaced.
+
+The checks that could stop it — a package or DKMS failure, an occupied UDP port,
+no default route — all run before the one-time token is spent, so a host that is
 not ready costs nothing. If the port is busy, edit `--endpoint` and re-run.
 
 An interface that already exists is never touched: the installer keeps it,
@@ -84,7 +111,7 @@ it cannot clean up files on an unreachable server.
 
 The uninstaller deliberately preserves WireGuard interfaces, peers, Docker
 volumes and `/var/lib/peerblade-agent`. Disconnecting from the control plane
-therefore neither interrupts the VPN nor deletes the local keys of managed
+therefore neither interrupts existing tunnels nor deletes the local keys of managed
 peers.
 
 ## Security
@@ -105,20 +132,21 @@ filled-in env file.
 - Linux amd64 or arm64 with systemd;
 - root access for the installation;
 - HTTPS access from the agent to the PeerBlade API;
-- the `wireguard-tools` and `iptables` packages;
+- `apt` on Ubuntu or Debian for automatic WireGuard/AmneziaWG package setup;
+- kernel headers compatible with the running kernel for an AmneziaWG node;
+- the `wireguard-tools` or `amneziawg` package and `iptables`;
 - a dedicated PeerBlade WireGuard interface;
 - Go 1.23+, on the build machine only.
 
 ## Building
 
-From the public repository root:
+From the repository root:
 
 ```bash
-cd agent
-PEERBLADE_AGENT_VERSION=0.6.1 bash scripts/build-linux-amd64.sh
+pnpm --filter @peerblade/agent build:linux
 ```
 
-The artefacts appear in `agent/dist`:
+The artefacts appear in `apps/agent/dist`:
 
 - `peerblade-agent-linux-amd64`;
 - `peerblade-agent-linux-amd64.sha256`.
@@ -126,21 +154,19 @@ The artefacts appear in `agent/dist`:
 Check the systemd unit on a machine that has systemd:
 
 ```bash
-cd agent
-bash deploy/verify.sh
+pnpm agent:verify-systemd
 ```
 
 The version can be overridden:
 
 ```bash
-cd agent
-PEERBLADE_AGENT_VERSION=0.6.1 bash scripts/build-linux-amd64.sh
+PEERBLADE_AGENT_VERSION=0.7.1 pnpm --filter @peerblade/agent build:linux
 ```
 
 Verify the checksum before copying:
 
 ```bash
-cd agent/dist
+cd apps/agent/dist
 sha256sum --check peerblade-agent-linux-amd64.sha256
 ./peerblade-agent-linux-amd64 version
 ```
@@ -150,7 +176,7 @@ sha256sum --check peerblade-agent-linux-amd64.sha256
 Copy the template outside the repository and replace the values:
 
 ```bash
-cp agent/deploy/agent.env.example /tmp/peerblade-agent.env
+cp deploy/agent/agent.env.example /tmp/peerblade-agent.env
 chmod 600 /tmp/peerblade-agent.env
 ```
 
@@ -160,11 +186,11 @@ to be a reachable HTTPS URL of the control plane.
 Native mode is switched on by the `PEERBLADE_MANAGED_*` variables.
 `PEERBLADE_MANAGED_INTERFACE` must name the interface dedicated to PeerBlade and
 nothing else. If a new interface is needed, it is safer to start on a port the
-current VPN does not use. For example:
+current interfaces do not use. For example:
 
 ```bash
 ip route show default
-sudo ./agent/deploy/setup-wireguard.sh peerblade0 10.44.0.1/24 51822 eth0
+sudo ./deploy/agent/setup-wireguard.sh peerblade0 10.44.0.1/24 51822 eth0
 ```
 
 Replace `eth0` with the outbound interface from the default route. The script
@@ -173,27 +199,28 @@ refuses to overwrite an existing configuration or interface, creates
 `wg-quick@peerblade0`. After that, open UDP `51822` in the firewall or the VPS
 panel and put the public `host:port` into `PEERBLADE_MANAGED_ENDPOINT`.
 
-A node can use any stable DNS name that resolves to it, for example
-`node.example.com`. That name goes into every peer configuration as the
-`Endpoint`, so changing it later requires reissuing those configurations.
+A node's name follows the country it sits in: `kz.peerblade.com`,
+`de.peerblade.com` and so on. Should a second node appear in the same country,
+add a number — `kz1`, `kz2`. That name goes into every peer's configuration as
+the `Endpoint` line, so it cannot change without reissuing the configurations.
 
 Before running anything with `sudo`, the binary and the configuration can be
 checked without touching the system:
 
 ```bash
-./agent/deploy/install.sh check \
-  ./agent/dist/peerblade-agent-linux-amd64 \
+./deploy/agent/install.sh check \
+  ./apps/agent/dist/peerblade-agent-linux-amd64 \
   /tmp/peerblade-agent.env
 ```
 
 ## Installing or updating
 
-Copy the binary, `agent/deploy` and the prepared env file to the test server
+Copy the binary, `deploy/agent` and the prepared env file to the test server
 first. Then, from the root of the copied directory:
 
 ```bash
-sudo ./agent/deploy/install.sh install \
-  ./agent/dist/peerblade-agent-linux-amd64 \
+sudo ./deploy/agent/install.sh install \
+  ./apps/agent/dist/peerblade-agent-linux-amd64 \
   /tmp/peerblade-agent.env
 ```
 
@@ -249,7 +276,7 @@ advance. wg-easy and PeerBlade cannot listen on the same UDP port at once.
 ## Uninstalling
 
 ```bash
-sudo ./agent/deploy/install.sh uninstall
+sudo ./deploy/agent/install.sh uninstall
 ```
 
 Uninstalling stops the service and removes the unit and the binary, but

@@ -10,17 +10,99 @@ agent from the server page after the panel has been updated.
 
 ## [Unreleased]
 
+### Panel
+
+- Added a WireGuard/AmneziaWG transport choice when registering a node and
+  transport badges on node and peer views.
+- Unified AmneziaWG snapshots, handshakes, traffic counters, peer lifecycle,
+  configuration downloads and QR codes with the existing WireGuard workflow.
+
 ### Agent
 
-- Published the complete Linux node-agent source, tests, installer scripts,
-  protocol documentation and security model under GPL-3.0-or-later.
-- Added a public amd64/arm64 release workflow with checksums and build
-  provenance attestations.
+- Agent `0.7.1` accepts AmneziaWG's `off` value for disabled persistent
+  keepalive, so snapshots continue after creating a peer without keepalive.
+- Agent `0.7.0` introduces an isolated AmneziaWG driver backed by the official
+  `awg` control tool while preserving the existing `wgctrl` WireGuard driver.
+- Added automatic AmneziaWG interface parameters, a dedicated interface setup
+  script and transport-aware install commands. Existing agent environments
+  without a transport remain WireGuard.
 
-### Documentation
+### Upgrade notes
 
-- Clarified the split-source model: the node agent is open source while the
-  web panel and control-plane API remain proprietary.
+- Agent update required: **yes**, only for nodes that use AmneziaWG. Existing
+  WireGuard nodes continue to work with older compatible agents.
+- Database migration required: **yes**; existing nodes and interfaces are
+  assigned WireGuard automatically.
+
+## [0.8.1] - 2026-08-28
+
+### Fixed
+
+- Fixed agent `0.6.2` registration: the API now accepts the `peer_traffic`
+  capability advertised by the bundled agent.
+- Cached pnpm packages before copying application sources into release images,
+  preventing code-only changes from invalidating the full dependency download.
+- Updated Docker release actions to their Node.js 24 releases.
+
+## [0.8.0] - 2026-08-28
+
+### Panel
+
+- Added node availability history with recorded agent outages, automatic
+  recoveries and downtime duration on the server page.
+- Added optional peer expiration. Expired access is disabled automatically by
+  the control plane and applied by the node agent.
+- Added live RX/TX speed derived from lightweight ten-second counter reports;
+  cumulative traffic history remains separate and unchanged.
+
+- Added sortable Peer, Handshake and Traffic columns to peer lists, including
+  compact sorting controls on mobile. Traffic sorting uses transmitted bytes.
+- Increased the detail of Today and Yesterday traffic charts from hourly to
+  half-hour buckets while retaining a compact set of time labels on the axis.
+- Unified the active-peer window at five minutes across peer lists, monitoring
+  summaries and interface descriptions.
+
+### Agent
+
+- Agent `0.6.2` adds lightweight ten-second WireGuard counter reports used for
+  live RX/TX speed. Older agents remain compatible but do not provide live
+  speed samples.
+
+### Website
+
+- Updated the fictional Interface previews with the new peer-table sorting
+  controls and five-minute activity explanation.
+
+### Upgrade notes
+
+- Agent update required: **yes**, update to `0.6.2` to enable live RX/TX
+  speed. Availability history and peer expiration also work with older agents.
+- Database migration required: **yes**; existing hourly traffic totals are
+  preserved and split evenly between the two historical half-hour buckets;
+  node events, peer expiration and live-rate fields are added automatically.
+
+## [0.6.1] - 2026-08-21
+
+### Agent
+
+- Published the Linux node agent, its tests and node-side deployment scripts as
+  open source under GPL-3.0-or-later.
+- Added public protocol, security, build and contribution documentation plus a
+  dedicated multi-architecture agent release workflow with checksums and build
+  provenance.
+
+### Website and documentation
+
+- Clarified the split-source model across the landing page, FAQ, legal pages,
+  `llms.txt` and both private and public documentation: the node agent is open
+  source, while the web panel and control-plane API remain proprietary.
+- Removed the old individual-developer wording from legal pages and documented
+  the license boundary between the agent and control plane.
+
+### Upgrade notes
+
+- Agent update required: **no**.
+- Database migration required: **no**.
 
 ## [0.6.0] - 2026-08-17
 
