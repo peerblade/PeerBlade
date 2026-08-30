@@ -10,6 +10,8 @@ agent from the server page after the panel has been updated.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-30
+
 ### Panel
 
 - Added a WireGuard/AmneziaWG transport choice when registering a node and
