@@ -16,10 +16,12 @@ type Collector struct {
 	source        snapshotSource
 	client        *Client
 	interfaceName string
+	transport     string
+	typeName      string
 }
 
-func NewCollector(source snapshotSource, client *Client, interfaceName string) *Collector {
-	return &Collector{source: source, client: client, interfaceName: interfaceName}
+func NewCollector(source snapshotSource, client *Client, interfaceName, transport, typeName string) *Collector {
+	return &Collector{source: source, client: client, interfaceName: interfaceName, transport: transport, typeName: typeName}
 }
 
 func (c *Collector) Collect() (wireguard.Snapshot, error) {
@@ -31,8 +33,8 @@ func (c *Collector) Collect() (wireguard.Snapshot, error) {
 	if err != nil {
 		return wireguard.Snapshot{}, fmt.Errorf("collect AmneziaWG interface: %w", err)
 	}
-	mapped := wireguard.MapDevice(device, "amneziawg")
-	mapped.Type = "AmneziaWG"
+	mapped := wireguard.MapDevice(device, c.transport)
+	mapped.Type = c.typeName
 	replaced := false
 	for index := range snapshot.Devices {
 		if snapshot.Devices[index].Name == c.interfaceName {

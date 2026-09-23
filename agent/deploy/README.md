@@ -40,6 +40,7 @@ is installed automatically from the Amnezia PPA together with `awg`,
 `awg-quick`, the current kernel headers and the DKMS module. The module must
 build and load successfully before PeerBlade exchanges the one-time enrollment
 token. This automated path supports Ubuntu and Debian hosts that use `apt`.
+**AmneziaWG 3.x** is a separate transport, not an alias for the existing AWG mode. New nodes use `peerblade-awg3`, UDP `51822` and `10.46.0.1/24`. The installer verifies support by bringing up the interface before enrollment and generates the header-protection key, S1-S4, padding, rekey, timeout, trailer and cookie parameters locally. These values stay in root-only files and are included only in the peer configuration issued to the user.
 
 If automatic package setup is unavailable or must be reviewed separately, use
 the upstream Ubuntu installation manually and then run the unchanged PeerBlade
@@ -160,7 +161,7 @@ pnpm agent:verify-systemd
 The version can be overridden:
 
 ```bash
-PEERBLADE_AGENT_VERSION=0.7.1 pnpm --filter @peerblade/agent build:linux
+PEERBLADE_AGENT_VERSION=0.8.0 pnpm --filter @peerblade/agent build:linux
 ```
 
 Verify the checksum before copying:

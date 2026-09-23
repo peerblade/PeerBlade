@@ -43,7 +43,7 @@ go test ./...
 go vet ./...
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
   -trimpath \
-  -ldflags "-s -w -X main.agentVersion=0.7.1" \
+  -ldflags "-s -w -X main.agentVersion=0.8.0" \
   -o dist/peerblade-agent-linux-amd64 .
 ```
 

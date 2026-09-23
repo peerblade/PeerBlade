@@ -239,6 +239,31 @@ func TestLoadAgentConfigRequiresCompleteNativeManagement(t *testing.T) {
 	}
 }
 
+func TestLoadAgentConfigLoadsAmneziaWG3Parameters(t *testing.T) {
+	t.Setenv("PEERBLADE_API_URL", "http://localhost:4000")
+	t.Setenv("PEERBLADE_SERVER_ID", "server-id")
+	t.Setenv("PEERBLADE_AGENT_TOKEN", "pbl_token")
+	t.Setenv("PEERBLADE_MANAGED_INTERFACE", "peerblade-awg3")
+	t.Setenv("PEERBLADE_MANAGED_TRANSPORT", "amneziawg3")
+	t.Setenv("PEERBLADE_MANAGED_ENDPOINT", "node.example.com:51822")
+	t.Setenv("PEERBLADE_MANAGED_ADDRESS_CIDR", "10.46.0.1/24")
+	t.Setenv("PEERBLADE_STATE_DIRECTORY", "/var/lib/peerblade-agent")
+	headerKey, err := wgtypes.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range map[string]string{"JC": "6", "JMIN": "20", "JMAX": "80", "S1": "12", "S2": "12", "S3": "12", "S4": "12", "H1": "1", "H2": "2", "H3": "3", "H4": "4", "HEADER_PROTECTION_KEY": headerKey.String(), "CONTENT_PADDING_ADDITION": "10-100", "REKEY_AFTER_TIME": "100-120", "REKEY_TIMEOUT": "3-8", "REJECT_AFTER_TIME": "150-180", "KEEPALIVE_TIMEOUT": "7-13", "MAX_HANDSHAKE_ATTEMPTS": "15-20", "RANDOM_TRAILERS": "on", "DISABLE_COOKIES": "on"} {
+		t.Setenv("PEERBLADE_AWG3_"+name, value)
+	}
+	config, err := loadAgentConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.managedTransport != "amneziawg3" || config.amnezia3Parameters.S4 != 12 {
+		t.Fatalf("unexpected AmneziaWG 3.x config: %+v", config)
+	}
+}
+
 func TestLoadAgentConfigLoadsAmneziaWGParameters(t *testing.T) {
 	t.Setenv("PEERBLADE_API_URL", "http://localhost:4000")
 	t.Setenv("PEERBLADE_SERVER_ID", "server-id")

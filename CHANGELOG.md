@@ -10,6 +10,32 @@ agent from the server page after the panel has been updated.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-23
+
+### Panel
+
+- Added AmneziaWG 3.x as a separate transport when registering a node, with
+  transport badges and the existing peer and configuration workflows.
+
+### Agent
+
+- Agent `0.8.0` adds an isolated `amneziawg3` driver with snapshots, peer
+  lifecycle management and supported AWG3 client configuration parameters.
+- Header protection, S1-S4, padding, rekey, timeout and trailer/cookie values
+  are generated and stored locally in root-only node state.
+
+### Deployment
+
+- Added dedicated AmneziaWG 3.x defaults: `peerblade-awg3`, UDP 51822 and
+  `10.46.0.1/24`, plus a separate interface setup script.
+
+### Upgrade notes
+
+- Agent update required: **only for AmneziaWG 3.x nodes**. Existing WireGuard
+  and AmneziaWG nodes remain compatible.
+- Database migration required: **yes**; the transport enum gains
+  `amneziawg3`.
+
 ## [0.9.0] - 2026-08-30
 
 ### Panel

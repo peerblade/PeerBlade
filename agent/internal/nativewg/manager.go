@@ -27,6 +27,7 @@ type Config struct {
 	ClientAllowedIPs []string
 	KeepaliveSeconds int
 	Amnezia          AmneziaParameters
+	Amnezia3         Amnezia3Parameters
 }
 
 type AmneziaParameters struct {
@@ -39,6 +40,21 @@ type AmneziaParameters struct {
 	H2   int64
 	H3   int64
 	H4   int64
+}
+
+type Amnezia3Parameters struct {
+	Jc, Jmin, Jmax         int
+	S1, S2, S3, S4         int
+	H1, H2, H3, H4         string
+	HeaderProtectionKey    string
+	ContentPaddingAddition string
+	RekeyAfterTime         string
+	RekeyTimeout           string
+	RejectAfterTime        string
+	KeepaliveTimeout       string
+	MaxHandshakeAttempts   string
+	RandomTrailers         string
+	DisableCookies         string
 }
 
 type CreatedPeer struct {
@@ -66,11 +82,16 @@ func NewManager(client deviceClient, store *Store, config Config) (*Manager, err
 	if config.Transport == "" {
 		config.Transport = "wireguard"
 	}
-	if config.Transport != "wireguard" && config.Transport != "amneziawg" {
-		return nil, errors.New("managed transport must be wireguard or amneziawg")
+	if config.Transport != "wireguard" && config.Transport != "amneziawg" && config.Transport != "amneziawg3" {
+		return nil, errors.New("managed transport must be wireguard, amneziawg or amneziawg3")
 	}
 	if config.Transport == "amneziawg" {
 		if err := validateAmneziaParameters(config.Amnezia); err != nil {
+			return nil, err
+		}
+	}
+	if config.Transport == "amneziawg3" {
+		if err := validateAmnezia3Parameters(config.Amnezia3); err != nil {
 			return nil, err
 		}
 	}
@@ -368,6 +389,18 @@ func (m *Manager) renderConfiguration(peer Peer, serverPublicKey string) string 
 			fmt.Sprintf("H4 = %d", m.config.Amnezia.H4),
 		)
 	}
+	if m.config.Transport == "amneziawg3" {
+		p := m.config.Amnezia3
+		interfaceLines = append(interfaceLines,
+			fmt.Sprintf("Jc = %d", p.Jc), fmt.Sprintf("Jmin = %d", p.Jmin), fmt.Sprintf("Jmax = %d", p.Jmax),
+			fmt.Sprintf("S1 = %d", p.S1), fmt.Sprintf("S2 = %d", p.S2), fmt.Sprintf("S3 = %d", p.S3), fmt.Sprintf("S4 = %d", p.S4),
+			"H1 = "+p.H1, "H2 = "+p.H2, "H3 = "+p.H3, "H4 = "+p.H4,
+			"HeaderProtectionKey = "+p.HeaderProtectionKey, "ContentPaddingAddition = "+p.ContentPaddingAddition,
+			"RekeyAfterTime = "+p.RekeyAfterTime, "RekeyTimeout = "+p.RekeyTimeout, "RejectAfterTime = "+p.RejectAfterTime,
+			"KeepaliveTimeout = "+p.KeepaliveTimeout, "MaxHandshakeAttempts = "+p.MaxHandshakeAttempts,
+			"RandomTrailers = "+p.RandomTrailers, "DisableCookies = "+p.DisableCookies,
+		)
+	}
 	if len(m.config.DNS) > 0 {
 		interfaceLines = append(interfaceLines, "DNS = "+strings.Join(m.config.DNS, ", "))
 	}
@@ -405,6 +438,48 @@ func validateAmneziaParameters(parameters AmneziaParameters) error {
 		seen[header] = true
 	}
 	return nil
+}
+
+func validateAmnezia3Parameters(p Amnezia3Parameters) error {
+	if p.Jc < 1 || p.Jc > 128 || p.Jmin < 1 || p.Jmax > 1280 || p.Jmin > p.Jmax {
+		return errors.New("AmneziaWG 3.x junk packet values are invalid")
+	}
+	for _, value := range []int{p.S1, p.S2, p.S3, p.S4} {
+		if value < 12 || value > 1280 {
+			return errors.New("AmneziaWG 3.x S1-S4 must be between 12 and 1280")
+		}
+	}
+	if _, err := wgtypes.ParseKey(p.HeaderProtectionKey); err != nil {
+		return errors.New("AmneziaWG 3.x HeaderProtectionKey is invalid")
+	}
+	for name, value := range map[string]string{"H1": p.H1, "H2": p.H2, "H3": p.H3, "H4": p.H4, "ContentPaddingAddition": p.ContentPaddingAddition, "RekeyAfterTime": p.RekeyAfterTime, "RekeyTimeout": p.RekeyTimeout, "RejectAfterTime": p.RejectAfterTime, "KeepaliveTimeout": p.KeepaliveTimeout, "MaxHandshakeAttempts": p.MaxHandshakeAttempts} {
+		if !validAmnezia3Range(value) {
+			return fmt.Errorf("AmneziaWG 3.x %s is invalid", name)
+		}
+	}
+	if p.RandomTrailers != "on" && p.RandomTrailers != "off" {
+		return errors.New("AmneziaWG 3.x RandomTrailers must be on or off")
+	}
+	if p.DisableCookies != "on" && p.DisableCookies != "off" {
+		return errors.New("AmneziaWG 3.x DisableCookies must be on or off")
+	}
+	return nil
+}
+
+func validAmnezia3Range(value string) bool {
+	parts := strings.Split(value, "-")
+	if len(parts) < 1 || len(parts) > 2 {
+		return false
+	}
+	first, err := strconv.Atoi(parts[0])
+	if err != nil || first < 0 {
+		return false
+	}
+	if len(parts) == 1 {
+		return true
+	}
+	second, err := strconv.Atoi(parts[1])
+	return err == nil && second >= first
 }
 
 func (m *Manager) nextAddress(state State) (string, error) {

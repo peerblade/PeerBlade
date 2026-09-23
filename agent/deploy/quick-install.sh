@@ -14,7 +14,7 @@ Usage:
   sudo bash install-agent.sh --url https://my.peerblade.com --token pen_... \
     [--endpoint node.example.com:51820] [--interface peerblade0] \
     [--subnet 10.44.0.1/24] [--dns 1.1.1.1,8.8.8.8] \
-    [--transport wireguard|amneziawg] [--no-interface]
+    [--transport wireguard|amneziawg|amneziawg3] [--no-interface]
 
 Supported: Ubuntu/Debian Linux on x86_64 or aarch64 with systemd.
 
@@ -108,8 +108,8 @@ parse_arguments() {
   [[ "$managed_subnet" =~ ^([0-9]{1,3}\.){3}1/24$ ]] || \
     fail "--subnet must be an IPv4 /24 ending in .1, for example 10.44.0.1/24"
   [[ "$managed_dns" =~ ^[0-9a-fA-F.:,]+$ ]] || fail "--dns must be a comma-separated list of addresses"
-  [[ "$managed_transport" == wireguard || "$managed_transport" == amneziawg ]] || \
-    fail "--transport must be wireguard or amneziawg"
+  [[ "$managed_transport" == wireguard || "$managed_transport" == amneziawg || "$managed_transport" == amneziawg3 ]] || \
+    fail "--transport must be wireguard, amneziawg or amneziawg3"
 
   listen_port=${managed_endpoint##*:}
   (( 10#$listen_port >= 1 && 10#$listen_port <= 65535 )) || \
@@ -121,7 +121,7 @@ parse_arguments() {
 prepare_interface_prerequisites() {
   local configuration_path=/etc/wireguard/${managed_interface}.conf
   local managed_network=${managed_subnet%.*}.0/24
-  if [[ "$managed_transport" == amneziawg ]]; then
+  if [[ "$managed_transport" == amneziawg || "$managed_transport" == amneziawg3 ]]; then
     configuration_path=/etc/amnezia/amneziawg/${managed_interface}.conf
   fi
 
@@ -130,7 +130,7 @@ prepare_interface_prerequisites() {
   if [[ -e "$configuration_path" ]] || ip link show dev "$managed_interface" >/dev/null 2>&1; then
     interface_exists=true
     echo "Interface $managed_interface already exists; leaving it as it is."
-    if [[ "$managed_transport" == amneziawg ]]; then
+    if [[ "$managed_transport" == amneziawg || "$managed_transport" == amneziawg3 ]]; then
       command -v awg >/dev/null 2>&1 || fail "awg is required for the existing AmneziaWG interface"
       awg show "$managed_interface" >/dev/null 2>&1 || \
         fail "$managed_interface is not available through the AmneziaWG control tool"
@@ -155,7 +155,7 @@ prepare_interface_prerequisites() {
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq wireguard-tools iptables >/dev/null
   fi
 
-  if [[ "$managed_transport" == amneziawg ]] && \
+  if [[ "$managed_transport" == amneziawg || "$managed_transport" == amneziawg3 ]] && \
     { ! command -v awg >/dev/null 2>&1 || ! command -v awg-quick >/dev/null 2>&1; }; then
     fail "AmneziaWG tools are missing; install the official amneziawg package and re-run this command"
   fi
@@ -230,6 +230,7 @@ install_amneziawg_prerequisites() {
   require_command modprobe
   modprobe amneziawg || \
     fail "the AmneziaWG kernel module could not load; check DKMS and linux headers"
+
 }
 
 create_interface() {
@@ -297,7 +298,7 @@ main() {
   fi
 
   if [[ "$manage_interface" == true ]]; then
-    if [[ "$managed_transport" == amneziawg ]]; then
+    if [[ "$managed_transport" == amneziawg || "$managed_transport" == amneziawg3 ]]; then
       install_amneziawg_prerequisites
     fi
     prepare_interface_prerequisites
@@ -332,6 +333,8 @@ main() {
     local setup_script="setup-wireguard.sh"
     if [[ "$managed_transport" == amneziawg ]]; then
       setup_script="setup-amneziawg.sh"
+    elif [[ "$managed_transport" == amneziawg3 ]]; then
+      setup_script="setup-amneziawg3.sh"
     fi
     curl --fail --silent --show-error --location \
       "$control_plane_url/downloads/$setup_script" \
@@ -392,6 +395,10 @@ main() {
           [[ "$value" =~ ^[0-9]+$ ]] || fail "cannot read $parameter from $awg_config"
           printf 'PEERBLADE_AWG_%s=%s\n' "${parameter^^}" "$value"
         done
+      elif [[ "$managed_transport" == amneziawg3 ]]; then
+        local awg3_environment=/etc/amnezia/amneziawg/.peerblade-awg3.env
+        [[ -r "$awg3_environment" ]] || fail "cannot read AWG3 parameters from $awg3_environment"
+        cat "$awg3_environment"
       fi
     fi
   } >"$environment_file"

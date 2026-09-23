@@ -24,7 +24,7 @@ import (
 	"github.com/peerblade/PeerBlade/agent/internal/wireguard"
 )
 
-var agentVersion = "0.7.1"
+var agentVersion = "0.8.0"
 
 const usage = "usage: peerblade-agent [snapshot|register|run|version|import-wg-easy]"
 
@@ -44,6 +44,7 @@ type agentConfig struct {
 	managedAllowedIPs  []string
 	stateDirectory     string
 	amneziaParameters  nativewg.AmneziaParameters
+	amnezia3Parameters nativewg.Amnezia3Parameters
 }
 
 func main() {
@@ -122,10 +123,14 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 				Device(string) (*wgtypes.Device, error)
 				ConfigureDevice(string, wgtypes.Config) error
 			} = wireGuardControlClient
-			if config.managedTransport == "amneziawg" {
+			if config.managedTransport == "amneziawg" || config.managedTransport == "amneziawg3" {
 				amneziaClient := amneziawg.NewClient()
 				managedClient = amneziaClient
-				collector = amneziawg.NewCollector(collector, amneziaClient, config.managedInterface)
+				typeName := "AmneziaWG"
+				if config.managedTransport == "amneziawg3" {
+					typeName = "AmneziaWG 3.x"
+				}
+				collector = amneziawg.NewCollector(collector, amneziaClient, config.managedInterface, config.managedTransport, typeName)
 			}
 			manager, err := nativewg.NewManager(managedClient, store, nativewg.Config{
 				InterfaceName:    config.managedInterface,
@@ -136,6 +141,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 				ClientAllowedIPs: config.managedAllowedIPs,
 				KeepaliveSeconds: 25,
 				Amnezia:          config.amneziaParameters,
+				Amnezia3:         config.amnezia3Parameters,
 			})
 			if err != nil {
 				return err
@@ -152,6 +158,8 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 			capabilities = append(capabilities, "native_peer_management")
 			if config.managedTransport == "amneziawg" {
 				capabilities = append(capabilities, "amneziawg_snapshot", "amneziawg_peer_management")
+			} else if config.managedTransport == "amneziawg3" {
+				capabilities = append(capabilities, "amneziawg3_snapshot", "amneziawg3_peer_management")
 			}
 		}
 		agent, err := client.Register(ctx, config.serverID, agentVersion, capabilities)
@@ -278,8 +286,8 @@ func loadAgentConfig() (agentConfig, error) {
 		if config.managedTransport == "" {
 			config.managedTransport = "wireguard"
 		}
-		if config.managedTransport != "wireguard" && config.managedTransport != "amneziawg" {
-			return agentConfig{}, errors.New("PEERBLADE_MANAGED_TRANSPORT must be wireguard or amneziawg")
+		if config.managedTransport != "wireguard" && config.managedTransport != "amneziawg" && config.managedTransport != "amneziawg3" {
+			return agentConfig{}, errors.New("PEERBLADE_MANAGED_TRANSPORT must be wireguard, amneziawg or amneziawg3")
 		}
 		for name, value := range map[string]string{
 			"PEERBLADE_MANAGED_ENDPOINT":     config.managedEndpoint,
@@ -299,6 +307,13 @@ func loadAgentConfig() (agentConfig, error) {
 				return agentConfig{}, err
 			}
 			config.amneziaParameters = parameters
+		}
+		if config.managedTransport == "amneziawg3" {
+			parameters, err := loadAmnezia3Parameters()
+			if err != nil {
+				return agentConfig{}, err
+			}
+			config.amnezia3Parameters = parameters
 		}
 	}
 
@@ -374,6 +389,47 @@ func loadAmneziaParameters() (nativewg.AmneziaParameters, error) {
 		S1: int(values["S1"]), S2: int(values["S2"]),
 		H1: values["H1"], H2: values["H2"], H3: values["H3"], H4: values["H4"],
 	}, nil
+}
+
+func loadAmnezia3Parameters() (nativewg.Amnezia3Parameters, error) {
+	integer := func(name string) (int, error) {
+		raw := strings.TrimSpace(os.Getenv("PEERBLADE_AWG3_" + name))
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return 0, fmt.Errorf("PEERBLADE_AWG3_%s must be an integer", name)
+		}
+		return value, nil
+	}
+	jc, err := integer("JC")
+	if err != nil {
+		return nativewg.Amnezia3Parameters{}, err
+	}
+	jmin, err := integer("JMIN")
+	if err != nil {
+		return nativewg.Amnezia3Parameters{}, err
+	}
+	jmax, err := integer("JMAX")
+	if err != nil {
+		return nativewg.Amnezia3Parameters{}, err
+	}
+	s1, err := integer("S1")
+	if err != nil {
+		return nativewg.Amnezia3Parameters{}, err
+	}
+	s2, err := integer("S2")
+	if err != nil {
+		return nativewg.Amnezia3Parameters{}, err
+	}
+	s3, err := integer("S3")
+	if err != nil {
+		return nativewg.Amnezia3Parameters{}, err
+	}
+	s4, err := integer("S4")
+	if err != nil {
+		return nativewg.Amnezia3Parameters{}, err
+	}
+	value := func(name string) string { return strings.TrimSpace(os.Getenv("PEERBLADE_AWG3_" + name)) }
+	return nativewg.Amnezia3Parameters{Jc: jc, Jmin: jmin, Jmax: jmax, S1: s1, S2: s2, S3: s3, S4: s4, H1: value("H1"), H2: value("H2"), H3: value("H3"), H4: value("H4"), HeaderProtectionKey: value("HEADER_PROTECTION_KEY"), ContentPaddingAddition: value("CONTENT_PADDING_ADDITION"), RekeyAfterTime: value("REKEY_AFTER_TIME"), RekeyTimeout: value("REKEY_TIMEOUT"), RejectAfterTime: value("REJECT_AFTER_TIME"), KeepaliveTimeout: value("KEEPALIVE_TIMEOUT"), MaxHandshakeAttempts: value("MAX_HANDSHAKE_ATTEMPTS"), RandomTrailers: value("RANDOM_TRAILERS"), DisableCookies: value("DISABLE_COOKIES")}, nil
 }
 
 func splitCSV(value string) []string {

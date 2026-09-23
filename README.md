@@ -1,6 +1,6 @@
 # PeerBlade
 
-**PeerBlade is a self-hosted control plane for WireGuard and AmneziaWG.** One
+**PeerBlade is a self-hosted control plane for WireGuard and AmneziaWG 1.x/3.x.** One
 panel for your nodes, peers and configurations — running in your own
 infrastructure.
 
@@ -42,7 +42,7 @@ PeerBlade is the missing management layer:
   your own nodes.
 - 🚫 **Not an SSH-based tool.** PeerBlade never opens a session to your VPS.
 - 🔎 **Open-source agent.** The privileged code running on WireGuard and
-  AmneziaWG nodes is published in [`agent/`](agent/); the control plane remains
+  AmneziaWG 1.x/3.x nodes is published in [`agent/`](agent/); the control plane remains
   proprietary.
 
 ## How it works
@@ -52,11 +52,13 @@ flowchart LR
     Admin["👤 Administrator<br/>browser"] -->|HTTPS| CP["🧠 Control plane<br/>panel + API"]
     CP --> DB[("🗄 PostgreSQL")]
     Agent["🤖 Agent on your VPS"] -->|outbound HTTPS| CP
-    Agent --> Driver{"WG / AWG driver"}
+    Agent --> Driver{"WG / AWG / AWG3 driver"}
     Driver --> WG["🔐 WireGuard interface"]
     Driver --> AWG["🛡 AmneziaWG interface"]
+    Driver --> AWG3["🛡 AmneziaWG 3.x interface"]
     Peer["📱 Peer device"] -->|UDP| WG
     Peer -->|UDP| AWG
+    Peer -->|UDP| AWG3
 ```
 
 Two moving parts:
@@ -64,7 +66,7 @@ Two moving parts:
 **The control plane** — the panel, the API and PostgreSQL. You deploy it on a
 Linux host behind a reverse proxy with TLS.
 
-**The agent** — a small native binary on each WireGuard or AmneziaWG node. It
+**The agent** — a small native binary on each WireGuard or AmneziaWG 1.x/3.x node. It
 runs as its own system user with a single Linux capability (`CAP_NET_ADMIN`) and
 dials **out** to the control plane over HTTPS. Nothing connects inward, so no
 port has to be opened for management and no SSH credentials are shared.
@@ -106,7 +108,7 @@ SSH, and a freshly provisioned machine is the expected starting point.
 - 🌐 **A DNS name pointing at it** — an `A` (and optionally `AAAA`) record. It
   must resolve _before_ the first start: Caddy requests a Let's Encrypt
   certificate on boot.
-- 🐧 **One or more WireGuard or AmneziaWG nodes** — `x86_64` or `arm64` Linux
+- 🐧 **One or more WireGuard or AmneziaWG 1.x/3.x nodes** — `x86_64` or `arm64` Linux
   with systemd and outbound HTTPS to the panel; the installer picks the matching
   agent build and prepares the transport selected in the panel. The control
   plane host itself can be the first WireGuard node — see `--with-node` in step 1.
@@ -304,6 +306,13 @@ loads the kernel module and generates the AWG parameters locally before it
 spends the enrollment token. WireGuard interfaces on the same host are left
 unchanged, so WG and AWG nodes can be managed from the same panel.
 
+Select **AmneziaWG 3.x** for the separate AWG3 transport. It uses its own
+`peerblade-awg3` interface, UDP 51822 and `10.46.0.1/24` defaults, so it can
+run alongside WireGuard and AmneziaWG 1.x on the same host. Header protection,
+padding, rekey, timeout and trailer/cookie parameters are generated and stored
+locally in root-only node state; private material is not sent to the control
+plane.
+
 Verify it came up:
 
 ```bash
@@ -311,6 +320,8 @@ systemctl status peerblade-agent --no-pager
 wg show peerblade0
 # For an AmneziaWG node:
 awg show peerblade-awg0
+# For an AmneziaWG 3.x node:
+awg show peerblade-awg3
 ```
 
 The server appears **online** in the panel within a snapshot interval, and you

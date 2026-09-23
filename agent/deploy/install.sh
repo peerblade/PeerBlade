@@ -72,12 +72,17 @@ validate_environment_file() {
     [[ "$managed_interface" =~ ^[A-Za-z0-9_.-]{1,15}$ ]] || \
       fail "PEERBLADE_MANAGED_INTERFACE has an invalid Linux interface name"
     managed_transport=$(sed -n 's/^PEERBLADE_MANAGED_TRANSPORT=//p' "$environment_file")
-    [[ -z "$managed_transport" || "$managed_transport" == wireguard || "$managed_transport" == amneziawg ]] || \
-      fail "PEERBLADE_MANAGED_TRANSPORT must be wireguard or amneziawg"
+    [[ -z "$managed_transport" || "$managed_transport" == wireguard || "$managed_transport" == amneziawg || "$managed_transport" == amneziawg3 ]] || \
+      fail "PEERBLADE_MANAGED_TRANSPORT must be wireguard, amneziawg or amneziawg3"
     if [[ "$managed_transport" == amneziawg ]]; then
       for variable in PEERBLADE_AWG_JC PEERBLADE_AWG_JMIN PEERBLADE_AWG_JMAX PEERBLADE_AWG_S1 PEERBLADE_AWG_S2 PEERBLADE_AWG_H1 PEERBLADE_AWG_H2 PEERBLADE_AWG_H3 PEERBLADE_AWG_H4; do
         [[ $(grep -Ec "^${variable}=[0-9]+$" "$environment_file") -eq 1 ]] || \
           fail "$environment_file must contain one numeric $variable for AmneziaWG"
+      done
+    fi
+    if [[ "$managed_transport" == amneziawg3 ]]; then
+      for variable in PEERBLADE_AWG3_JC PEERBLADE_AWG3_JMIN PEERBLADE_AWG3_JMAX PEERBLADE_AWG3_S1 PEERBLADE_AWG3_S2 PEERBLADE_AWG3_S3 PEERBLADE_AWG3_S4 PEERBLADE_AWG3_H1 PEERBLADE_AWG3_H2 PEERBLADE_AWG3_H3 PEERBLADE_AWG3_H4 PEERBLADE_AWG3_HEADER_PROTECTION_KEY PEERBLADE_AWG3_CONTENT_PADDING_ADDITION PEERBLADE_AWG3_REKEY_AFTER_TIME PEERBLADE_AWG3_REKEY_TIMEOUT PEERBLADE_AWG3_REJECT_AFTER_TIME PEERBLADE_AWG3_KEEPALIVE_TIMEOUT PEERBLADE_AWG3_MAX_HANDSHAKE_ATTEMPTS PEERBLADE_AWG3_RANDOM_TRAILERS PEERBLADE_AWG3_DISABLE_COOKIES; do
+        [[ $(grep -Ec "^${variable}=.+$" "$environment_file") -eq 1 ]] || fail "$environment_file must contain one non-empty $variable for AmneziaWG 3.x"
       done
     fi
   fi

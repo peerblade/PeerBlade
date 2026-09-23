@@ -42,7 +42,7 @@ The current native command set covers:
 
 Commands target the dedicated interface named in
 `PEERBLADE_MANAGED_INTERFACE`; `PEERBLADE_MANAGED_TRANSPORT` selects the
-WireGuard or AmneziaWG driver. Other interfaces may be included in read-only
+WireGuard, AmneziaWG or AmneziaWG 3.x driver. Other interfaces may be included in read-only
 snapshots but are not modified by native peer-management commands.
 
 ## Failure behaviour

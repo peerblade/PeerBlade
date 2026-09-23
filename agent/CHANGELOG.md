@@ -6,6 +6,10 @@ control-plane image version.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-23
+
+- Added the separate `amneziawg3` transport with AWG3 snapshots, peer lifecycle and client configuration parameters, while preserving the existing WireGuard and AmneziaWG drivers.
+
 ## [0.7.1] - 2026-08-30
 
 - Fixed AmneziaWG snapshot parsing when `awg show dump` reports disabled

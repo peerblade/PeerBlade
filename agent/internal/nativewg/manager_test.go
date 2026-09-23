@@ -149,6 +149,30 @@ func TestManagerRendersAmneziaWGConfiguration(t *testing.T) {
 	}
 }
 
+func TestManagerRendersAmneziaWG3Configuration(t *testing.T) {
+	manager, client, store := newTestManager(t)
+	headerKey, err := wgtypes.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err = NewManager(client, store, Config{
+		InterfaceName: "peerblade-awg3", Transport: "amneziawg3", Endpoint: "node.example.com:51822", AddressCIDR: "10.46.0.1/24", ClientAllowedIPs: []string{"0.0.0.0/0"},
+		Amnezia3: Amnezia3Parameters{Jc: 6, Jmin: 20, Jmax: 80, S1: 12, S2: 12, S3: 12, S4: 12, H1: "1", H2: "2", H3: "3", H4: "4", HeaderProtectionKey: headerKey.String(), ContentPaddingAddition: "10-100", RekeyAfterTime: "100-120", RekeyTimeout: "3-8", RejectAfterTime: "150-180", KeepaliveTimeout: "7-13", MaxHandshakeAttempts: "15-20", RandomTrailers: "on", DisableCookies: "on"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := manager.CreatePeer("AWG3 phone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"S3 = 12", "S4 = 12", "HeaderProtectionKey = " + headerKey.String(), "ContentPaddingAddition = 10-100", "RandomTrailers = on", "DisableCookies = on"} {
+		if !strings.Contains(created.Configuration, expected) {
+			t.Fatalf("AWG3 configuration does not contain %q:\n%s", expected, created.Configuration)
+		}
+	}
+}
+
 func TestNewManagerRejectsNon24Network(t *testing.T) {
 	_, client, store := newTestManager(t)
 	_, err := NewManager(client, store, Config{
